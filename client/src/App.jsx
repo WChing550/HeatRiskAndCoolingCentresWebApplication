@@ -23,8 +23,9 @@ import ActivityLog from './modules/admin/ActivityLog.jsx';
 import AlertBanner from './components/AlertBanner.jsx';
 
 const btn = (label, fn, kind = 'primary', icon = null) => <button className={'btn ' + kind} onClick={fn}>{icon}{label}</button>;
+const RESET_TOKEN_IN_URL = new URLSearchParams(window.location.search).has('token');
 function App() {
-    const [user, U] = useState(null), [userCoords, SET_USER_COORDS] = useState(null), [authMode, AM] = useState(location.hash.startsWith('#/centres') ? 'public' : 'landing'), [page, P] = useState(location.hash.startsWith('#/centres') ? 'centres' : 'overview'), [module, M] = useState('user'), [navOpen, NO] = useState(false), [error, E] = useState(''), [success, S] = useState(''), [weather, W] = useState(null), [weatherError, WE] = useState(''), [centres, C] = useState([]), [reports, R] = useState([]), [dash, D] = useState(null), [history, H] = useState([]), [stats, ST] = useState(null), [alerts, SET_ALERTS] = useState([]), [busy, B] = useState(false);
+    const [user, U] = useState(null), [userCoords, SET_USER_COORDS] = useState(null), [authMode, AM] = useState(RESET_TOKEN_IN_URL ? 'reset' : location.hash.startsWith('#/centres') ? 'public' : 'landing'), [page, P] = useState(location.hash.startsWith('#/centres') ? 'centres' : 'overview'), [module, M] = useState('user'), [navOpen, NO] = useState(false), [error, E] = useState(''), [success, S] = useState(''), [weather, W] = useState(null), [weatherError, WE] = useState(''), [centres, C] = useState([]), [reports, R] = useState([]), [dash, D] = useState(null), [history, H] = useState([]), [stats, ST] = useState(null), [alerts, SET_ALERTS] = useState([]), [busy, B] = useState(false);
     const [localWeather, LW] = useState(null), [localWeatherError, LWE] = useState(''), [weatherScope, WS] = useState('city'), [weatherLoading, WL] = useState(false), [centresLoaded, CL] = useState(false);
     const weatherRequests = useRef({city: 0, location: 0});
     const pendingWeather = useRef(0);

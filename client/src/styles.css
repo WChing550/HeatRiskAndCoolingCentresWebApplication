@@ -402,6 +402,12 @@ select:focus-visible {
   margin-top: 10px
 }
 
+.notice.success {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #065f46;
+}
+
 .hero-link {
   border: 0;
   background: none;
