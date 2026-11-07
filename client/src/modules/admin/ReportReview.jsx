@@ -15,6 +15,7 @@ export default function ReportReview({ ctx }) {
   if (page !== 'reports' || !isAdmin) return null;
   return (
     <>
+      <div className="queue-summary">{[['pending','Awaiting review'],['approved','Approved'],['rejected','Rejected']].map(([key,label])=><button key={key} className={'queue-stat '+(filter===key?'selected':'')} onClick={()=>setFilter(filter===key?'all':key)} aria-pressed={filter===key}><span className={'queue-dot '+key}/><span>{label}</span><b>{reports.filter(r=>r.status===key).length}</b></button>)}</div>
       <div className="toolbar">
         <div className="search"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search report, category or reporter…" /></div>
         <select value={filter} onChange={event => setFilter(event.target.value)}>

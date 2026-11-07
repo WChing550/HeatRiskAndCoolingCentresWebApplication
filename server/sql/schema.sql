@@ -78,3 +78,9 @@ CREATE INDEX IF NOT EXISTS idx_activity_module ON admin_activity_logs(module,cre
 
 -- 5. Analytics: speed up location grouping for the sampled-location map
 CREATE INDEX IF NOT EXISTS idx_heat_coords ON heat_risk_logs(latitude,longitude);
+
+-- Multiple centre photos
+-- Additive and safe to re-run. Existing single-photo covers are retained.
+ALTER TABLE cooling_centres ADD COLUMN IF NOT EXISTS image_urls TEXT[] NOT NULL DEFAULT '{}';
+UPDATE cooling_centres SET image_urls=ARRAY[image_url]
+WHERE image_url IS NOT NULL AND cardinality(image_urls)=0;

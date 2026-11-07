@@ -1,3 +1,4 @@
+import {savedPhotos} from './centrePhotos.js';
 // HeatSafe KL — Admin submodules:
 //   1. User Management            4. Heat Alert Management
 //   2. Centre Verification        5. Activity Log / Audit Trail
@@ -29,6 +30,7 @@ export function centreOut(row) {
   const {expired: _drop, ...rest} = row;
   return {
     ...rest,
+    image_urls: savedPhotos(row),
     last_inspection_date: ymd(row.last_inspection_date),
     next_inspection_date: ymd(row.next_inspection_date),
     verified: Boolean(row.verified) && !expired,

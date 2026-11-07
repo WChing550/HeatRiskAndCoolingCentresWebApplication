@@ -1,1 +1,10 @@
-import React from 'react';import{createRoot}from'react-dom/client';import'leaflet/dist/leaflet.css';import'./styles.css';import App from'./App.jsx';createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import 'leaflet/dist/leaflet.css';
+import './styles.css';
+import './design.css';
+import './premium.css';
+import './centre-features.css';
+import App from './App.jsx';
+import Motion from './components/Motion.jsx';
+createRoot(document.getElementById('root')).render(<React.StrictMode><Motion><App /></Motion></React.StrictMode>);
