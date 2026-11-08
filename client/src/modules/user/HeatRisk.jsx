@@ -2,12 +2,12 @@ import React from 'react';
 import { LocateFixed, RefreshCw, MapPin } from 'lucide-react';
 
 export default function HeatRisk({ ctx }) {
-  const { page, weather, weatherError, getWeather, locate, dt, Panel, isAdmin, weatherScope = 'city', setWeatherScope, userCoords, weatherLoading, locationError } = ctx;
+  const { page, weather, weatherError, getWeather, locate, dt, Panel, isAdmin, weatherScope = 'city', setWeatherScope, userCoords, weatherLoading, locationError, refreshWeather } = ctx;
   if (page !== 'heat') return null;
   const risk = weather?.risk_level;
-  const personal = !isAdmin && weatherScope === 'location';
+  const personal = weatherScope === 'location';
   return <>
-    <div className="weather-scope"><div><MapPin size={17}/><span><b>{personal ? 'My current location' : 'Kuala Lumpur weather'}</b><small>{personal ? 'Weather near your detected coordinates. This does not replace city monitoring.' : 'City monitoring uses Kuala Lumpur coordinates, regardless of your device location.'}</small></span></div>{!isAdmin && <div className="weather-scope-actions"><button className={'btn secondary '+(!personal?'scope-selected':'')} disabled={weatherLoading} onClick={()=>{setWeatherScope('city');getWeather();}}><RefreshCw size={14}/>Refresh Kuala Lumpur weather</button>{personal && userCoords && <button className="btn secondary" disabled={weatherLoading} onClick={()=>getWeather(userCoords)}><RefreshCw size={14}/>Refresh my location weather</button>}<button className="btn secondary" disabled={weatherLoading} onClick={()=>locate(()=>setWeatherScope('location'))}><LocateFixed size={14}/>{personal?'Detect my location again':'Use my current location'}</button></div>}</div>
+    <div className="weather-scope"><div><MapPin size={17}/><span><b>{personal ? 'My current location' : 'Kuala Lumpur weather'}</b><small>{personal ? 'Weather near your detected coordinates. This does not replace city monitoring.' : 'City monitoring uses Kuala Lumpur coordinates, regardless of your device location.'}</small></span></div>{<div className="weather-scope-actions"><button className={'btn secondary '+(!personal?'scope-selected':'')} disabled={weatherLoading} onClick={()=>{setWeatherScope('city');(isAdmin ? refreshWeather : getWeather)();}}><RefreshCw size={14}/>Refresh Kuala Lumpur weather</button>{personal && userCoords && <button className="btn secondary" disabled={weatherLoading} onClick={()=>getWeather(userCoords)}><RefreshCw size={14}/>Refresh my location weather</button>}<button className="btn secondary" disabled={weatherLoading} onClick={()=>locate(()=>setWeatherScope('location'))}><LocateFixed size={14}/>{personal?'Detect my location again':'Use my current location'}</button></div>}</div>
     {weatherError && <div className="notice" role="alert">{weatherError}</div>}{locationError && locationError !== weatherError && <div className="notice" role="alert">{locationError}</div>}
     <div className={isAdmin?'admin-heat-reading':'columns heatcols'}>
       <div className={'heatbox '+(risk==='High'?'high':risk==='Moderate'?'moderate':risk==='Low'?'low':'unavailable')} aria-busy={weatherLoading}>
