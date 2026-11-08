@@ -914,3 +914,21 @@
 .centre-location-detail .walking-link:hover {
     color: #fff
 }
+
+/* Admin search bars: keep the border on the wrapper, not the inner input. */
+.admin-shell .search input,
+.admin-shell .search input:focus,
+.admin-shell .search input:focus-visible {
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+    min-width: 0;
+}
+
+/* Keep a visible focus cue on the complete search bar. */
+.admin-shell .search:focus-within {
+    border-color: #536e86;
+}

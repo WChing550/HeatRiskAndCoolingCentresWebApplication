@@ -506,10 +506,7 @@ function App() {
           {page === 'profile' && user && <Profile ctx={ctx} />}
 
           <footer className="footer">
-            © {new Date().getFullYear()} HeatSafe KL <span>
-              <ShieldCheck size={14} /> Designed for safer communities in Kuala Lumpur
-            </span>
-            <span>Follow official heat advisories.</span>
+            © {new Date().getFullYear()} HeatSafe KL
           </footer>
         </div>
       </main>
