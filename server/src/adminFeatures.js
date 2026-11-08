@@ -1,3 +1,4 @@
+import {walkingDirections} from './centreLocation.js';
 import {savedPhotos} from './centrePhotos.js';
 // HeatSafe KL — Admin submodules:
 //   1. User Management            4. Heat Alert Management
@@ -31,6 +32,7 @@ export function centreOut(row) {
   return {
     ...rest,
     image_urls: savedPhotos(row),
+    walking_directions_url: walkingDirections(row),
     last_inspection_date: ymd(row.last_inspection_date),
     next_inspection_date: ymd(row.next_inspection_date),
     verified: Boolean(row.verified) && !expired,

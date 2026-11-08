@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { pool } from './db.js';
 import { heatIndexC, riskLevel, riskAdvice } from './heat.js';
 import { registerCentrePhotoRoutes } from './centrePhotos.js';
+import { registerCentreLocationRoutes } from './centreLocation.js';
 import {
   registerAdminFeatures,
   logActivity,
@@ -536,6 +537,8 @@ registerCentrePhotoRoutes(app, {
   diffFields,
   uploadDir,
 });
+
+registerCentreLocationRoutes(app, { auth, admin, ar });
 
 app.patch(
   '/api/admin/centres/:id/status',

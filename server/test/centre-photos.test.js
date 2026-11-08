@@ -5,12 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import {registerCentrePhotoRoutes,resolvePhotoOrder,savedPhotos,validateImage} from '../src/centrePhotos.js';
+import {createAddressVerifier} from '../src/centreLocation.js';
 import {squareCrop,centrePhotos} from '../../client/src/lib/centrePhotos.js';
 
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
+const verifier=createAddressVerifier({secret:'isolated-photo-test-secret'});
 const existing={id:'1',name:'Existing centre',verified:false,image_url:'/uploads/old.jpg',image_urls:['/uploads/old.jpg','/uploads/second.jpg']};
 function fields(data=new FormData()){
   for(const [key,value] of Object.entries({name:'Test facility',address:'Kuala Lumpur',latitude:'3.14',longitude:'101.69',operatingHours:'09:00–18:00',capacity:'25',status:'open'}))data.set(key,value);
+  data.set('locationToken',verifier.issueToken({address:'Kuala Lumpur',latitude:3.14,longitude:101.69},'test-admin'));data.set('addressConfirmed','true');
   return data;
 }
 async function harness(t,{fail=false}={}){
@@ -23,8 +26,8 @@ async function harness(t,{fail=false}={}){
     return{rowCount:1,rows:[{id:'1',name:values[0],image_url:values[10],image_urls:values[11],verified:false}]};
   }};
   const app=express();
-  app.use((q,_s,next)=>{q.session={user:q.headers['x-test-role']?{role:q.headers['x-test-role']}:null};next();});
-  registerCentrePhotoRoutes(app,{pool,uploadDir:dir,
+  app.use((q,_s,next)=>{q.session={user:q.headers['x-test-role']?{id:'test-admin',role:q.headers['x-test-role']}:null};next();});
+  registerCentrePhotoRoutes(app,{pool,uploadDir:dir,verifyLocation:verifier.verifyForSave,
     auth:(q,s,next)=>q.session.user?next():s.status(401).json({error:'Sign in'}),
     admin:(q,s,next)=>q.session.user.role==='admin'?next():s.status(403).json({error:'Admin only'}),
     ar:fn=>(q,s,next)=>Promise.resolve(fn(q,s,next)).catch(next),str:v=>typeof v==='string'?v.trim():'',n:v=>v==null||v===''?null:Number(v),
@@ -97,4 +100,13 @@ test('the upload limit is enforced at ten files',async t=>{
 });
 test('non-admin and unauthenticated requests never reach the uploader or database',async t=>{
   const h=await harness(t);assert.equal((await h.send(fields(),'POST','user')).status,403);assert.equal((await h.send(fields(),'POST',null)).status,401);assert.equal(h.calls.length,0);assert.deepEqual(await fs.readdir(h.dir),[]);
+});
+
+test('a new centre cannot bypass address confirmation by posting directly to the upload API',async t=>{
+ const h=await harness(t),data=fields();data.delete('locationToken');data.set('addressConfirmed','false');
+ const r=await h.send(data);assert.equal(r.status,400);assert.equal(h.calls.length,0);
+});
+test('changing address text after a valid match invalidates the save',async t=>{
+ const h=await harness(t),data=fields();data.set('address','A different, unmatched address');
+ const r=await h.send(data);assert.equal(r.status,400);assert.equal(h.calls.length,0);
 });
