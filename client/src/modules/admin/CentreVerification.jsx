@@ -135,7 +135,7 @@ export default function CentreVerification({ ctx }) {
         <small>{rows.length} centres</small>
       </div>
 
-      <Panel title="Verification & inspection register" sub="Only centres with a current verification appear to the public.">
+      <Panel title="Verification & inspection register" sub="Only currently verified centres appear in Cooling Centres. Manage pending, rejected and expired records here.">
         {loading ? <Empty title="Loading…" text="Please wait." /> : rows.length ? (
           <div className="tablewrap">
             <table>
@@ -148,7 +148,7 @@ export default function CentreVerification({ ctx }) {
                     <td>{c.last_inspection_date ? day(c.last_inspection_date) : '—'}{c.inspection_count > 0 && <small className="subtle">{c.inspection_count} inspection{c.inspection_count === 1 ? '' : 's'}</small>}</td>
                     <td>{c.next_inspection_date ? day(c.next_inspection_date) : '—'}<DueLabel centre={c} /></td>
                     <td>{c.verified_by_name || '—'}{c.verified_at && <small className="subtle">{dt(c.verified_at)}</small>}</td>
-                    <td><div className="rowactions"><button className="btn secondary small" onClick={() => openCentre(c)}><ClipboardCheck size={14} /> {c.verification_status === 'pending' ? 'Verify' : 'Inspect'}</button></div></td>
+                    <td><div className="rowactions"><button className="btn secondary small" onClick={() => openCentre(c)}><ClipboardCheck size={14} /> {c.verification_status === 'pending' ? 'Verify' : 'Inspect'}</button><button type="button" className="btn secondary small" onClick={()=>{ctx.setPage('centres');window.location.hash='/centres/'+c.id;}}>Details</button></div></td>
                   </tr>
                 ))}
               </tbody>
