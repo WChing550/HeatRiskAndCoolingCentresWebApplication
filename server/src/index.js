@@ -135,30 +135,54 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/auth/me', (req, res) => res.json({ user: req.session.user || null }));
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/; // 8+ chars, 1 uppercase, 1 lowercase, 1 number
+
 app.post(
   '/api/auth/register',
   limiter,
   ar(async (req, res) => {
-    const { fullName, email, username, password } = req.body;
+    const fullName = str(req.body.fullName);
+    const email = str(req.body.email).toLowerCase();
+    const username = str(req.body.username);
+    const password = String(req.body.password || '');
 
-    if (!str(fullName) || !str(email) || !str(username) || String(password || '').length < 8) {
-      return res
-        .status(400)
-        .json({ error: 'Enter name, valid email, username and password (8+ characters).' });
+    if (!fullName || !email || !username || !password) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    if (!USERNAME_REGEX.test(username)) {
+      return res.status(400).json({
+        error: 'Username must be 3–20 characters and contain only letters, numbers, underscores, or hyphens.',
+      });
+    }
+
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json({ error: 'Please provide a valid email address.' });
+    }
+
+    // Password Complexity Validation
+    if (!PASSWORD_REGEX.test(password)) {
+      return res.status(400).json({
+        error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.',
+      });
     }
 
     try {
+      const passwordHash = await bcrypt.hash(password, 12);
       const result = await pool.query(
-        "INSERT INTO users(full_name,email,username,password_hash,role) VALUES($1,$2,$3,$4,'user') RETURNING *",
-        [str(fullName), str(email).toLowerCase(), str(username), await bcrypt.hash(password, 12)]
+        "INSERT INTO users(full_name, email, username, password_hash, role) VALUES($1, $2, $3, $4, 'user') RETURNING *",
+        [fullName, email, username, passwordHash]
       );
+
       res.status(201).json({
         message: 'Account created. Please sign in.',
         user: userSafe(result.rows[0]),
       });
     } catch (e) {
       if (e.code === '23505') {
-        return res.status(409).json({ error: 'Email or username already exists.' });
+        return res.status(409).json({ error: 'Email or username is already registered.' });
       }
       throw e;
     }
@@ -241,11 +265,14 @@ app.post(
       [email]
     );
 
-    if (result.rowCount && result.rows[0].account_status !== 'deactivated') {
+    if (!result.rowCount) {
+      console.log('RESET: no account found for', email);
+    } else if (result.rows[0].account_status === 'deactivated') {
+      console.log('RESET: account is deactivated for', email);
+    } else {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-      // One active reset link per email
       await pool.query('DELETE FROM password_resets WHERE email=$1', [email]);
       await pool.query(
         "INSERT INTO password_resets(email,token_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '15 minutes')",
@@ -253,25 +280,19 @@ app.post(
       );
 
       const link = `${process.env.CLIENT_ORIGIN || 'http://localhost:5173'}/?token=${token}`;
-      const name = result.rows[0].full_name;
+      console.log('RESET LINK (for testing):', link);
 
       try {
         await mailer.sendMail({
           from: process.env.MAIL_FROM,
           to: email,
           subject: 'Reset your HeatSafe KL password',
-          text:
-            `Hi ${name},\n\n` +
-            `Use this link to set a new password (valid for 15 minutes):\n${link}\n\n` +
-            'If you did not request this, you can ignore this email.',
-          html:
-            `<p>Hi ${name},</p>` +
-            '<p>Use this link to set a new password (valid for 15 minutes):</p>' +
-            `<p><a href="${link}">Reset my password</a></p>` +
-            '<p>If you did not request this, you can ignore this email.</p>',
+          text: `Use this link to set a new password (valid for 15 minutes):\n${link}`,
+          html: `<p>Use this link to set a new password (valid for 15 minutes):</p><p><a href="${link}">Reset my password</a></p>`,
         });
+        console.log('RESET: email sent to', email);
       } catch (e) {
-        console.error('Reset email failed:', e.message);
+        console.error('RESET: email failed:', e.message);
       }
     }
 

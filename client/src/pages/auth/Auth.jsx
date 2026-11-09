@@ -11,6 +11,10 @@ const COPY = {
   reset: { title: 'Set a new password', sub: 'Choose a new password for your account.', button: 'Update password' },
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
 function Auth({ home, mode, setMode, done, guest }) {
   const [form, setForm] = useState({
     fullName: '',
@@ -20,6 +24,9 @@ function Auth({ home, mode, setMode, done, guest }) {
     password: '',
     confirmPassword: '',
   });
+
+  // Track field-specific errors
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,57 +40,128 @@ function Auth({ home, mode, setMode, done, guest }) {
   const isReset = mode === 'reset';
   const copy = COPY[mode] || COPY.login;
 
-  // Open the reset form automatically when the user arrives from the email link
   useEffect(() => {
     if (resetToken) setMode('reset');
   }, [resetToken]);
 
   function handleChange(event) {
-    setForm({ ...form, [event.target.name]: event.target.value });
+    const { name, value } = event.target;
+    setForm({ ...form, [name]: value });
+    // Clear error for field when user edits it
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: '' }));
+    }
   }
 
   function changeMode(next) {
     setMode(next);
     setError('');
     setSuccess('');
+    setFieldErrors({});
+  }
+
+  // Perform per-field validation
+  function validateForm() {
+    const errors = {};
+
+    if (isRegister) {
+      if (!form.fullName.trim()) {
+        errors.fullName = 'Please enter your full name.';
+      }
+
+      if (!form.username.trim()) {
+        errors.username = 'Please enter a username.';
+      } else if (!USERNAME_REGEX.test(form.username.trim())) {
+        errors.username = 'Username must be 3–20 characters and contain only letters, numbers, underscores, or hyphens.';
+      }
+
+      if (!form.email.trim()) {
+        errors.email = 'Please enter your email.';
+      } else if (!EMAIL_REGEX.test(form.email.trim())) {
+        errors.email = 'Please enter a valid email address.';
+      }
+
+      if (!form.password) {
+        errors.password = 'Please enter a password.';
+      } else if (!PASSWORD_REGEX.test(form.password)) {
+        errors.password = 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.';
+      }
+
+      if (!form.confirmPassword) {
+        errors.confirmPassword = 'Please confirm your password.';
+      } else if (form.password !== form.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match.';
+      }
+    }
+
+    if (isReset) {
+      if (!form.password) {
+        errors.password = 'Please enter a new password.';
+      } else if (!PASSWORD_REGEX.test(form.password)) {
+        errors.password = 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.';
+      }
+
+      if (!form.confirmPassword) {
+        errors.confirmPassword = 'Please confirm your password.';
+      } else if (form.password !== form.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match.';
+      }
+    }
+
+    if (isForgot && !form.email.trim()) {
+      errors.email = 'Please enter your email.';
+    }
+
+    if (isLogin) {
+      if (!form.login.trim()) errors.login = 'Please enter your email or username.';
+      if (!form.password) errors.password = 'Please enter your password.';
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!validateForm()) return;
+
     setBusy(true);
 
     try {
       if (isRegister) {
-        await api('/auth/register', { method: 'POST', body: JSON.stringify(form) });
+        const payload = {
+          fullName: form.fullName.trim(),
+          email: form.email.trim().toLowerCase(),
+          username: form.username.trim(),
+          password: form.password,
+        };
+
+        await api('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
         setMode('login');
-        setSuccess('Account created. Please sign in.');
+        setSuccess('Account created successfully. Please sign in.');
       } else if (isForgot) {
         await api('/auth/forgot-password', {
           method: 'POST',
-          body: JSON.stringify({ email: form.email.trim() }),
+          body: JSON.stringify({ email: form.email.trim().toLowerCase() }),
         });
-        // Same message whether or not the email exists, so nobody can probe for accounts
         setSuccess('If that email is registered, a reset link has been sent. Please check your inbox.');
       } else if (isReset) {
-        if (form.password !== form.confirmPassword) {
-          setError('Passwords do not match.');
-          return;
-        }
         await api('/auth/reset-password', {
           method: 'POST',
           body: JSON.stringify({ token: resetToken, password: form.password }),
         });
-        window.history.replaceState({}, '', window.location.pathname); // remove ?token= from the URL
+        window.history.replaceState({}, '', window.location.pathname);
         setResetToken('');
-        setForm(previous => ({ ...previous, password: '', confirmPassword: '' }));
+        setForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
         setMode('login');
         setSuccess('Password updated. Please sign in with your new password.');
       } else {
         const data = await api('/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ login: form.login, password: form.password }),
+          body: JSON.stringify({ login: form.login.trim().toLowerCase(), password: form.password }),
         });
         done(data.user);
       }
@@ -137,27 +215,60 @@ function Auth({ home, mode, setMode, done, guest }) {
         {error && <div className="notice" role="alert">{error}</div>}
         {success && <div className="notice success" role="status">{success}</div>}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {isRegister && (
             <>
               <Field label="Full name">
-                <input name="fullName" value={form.fullName} onChange={handleChange} required />
+                <input
+                  name="fullName"
+                  value={form.fullName}
+                  onChange={handleChange}
+                  placeholder="e.g. Sarah Ahmad"
+                />
+                {fieldErrors.fullName && (
+                  <span className="field-error">{fieldErrors.fullName}</span>
+                )}
               </Field>
+
               <Field label="Username">
-                <input name="username" value={form.username} onChange={handleChange} required />
+                <input
+                  name="username"
+                  value={form.username}
+                  onChange={handleChange}
+                  placeholder="e.g. sarah_kl"
+                />
+                {fieldErrors.username && (
+                  <span className="field-error">{fieldErrors.username}</span>
+                )}
               </Field>
             </>
           )}
 
           {(isRegister || isForgot) && (
             <Field label="Email">
-              <input type="email" name="email" value={form.email} onChange={handleChange} required />
+              <input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+              />
+              {fieldErrors.email && (
+                <span className="field-error">{fieldErrors.email}</span>
+              )}
             </Field>
           )}
 
           {isLogin && (
             <Field label="Email or username">
-              <input name="login" value={form.login} onChange={handleChange} required />
+              <input
+                name="login"
+                value={form.login}
+                onChange={handleChange}
+              />
+              {fieldErrors.login && (
+                <span className="field-error">{fieldErrors.login}</span>
+              )}
             </Field>
           )}
 
@@ -168,22 +279,24 @@ function Auth({ home, mode, setMode, done, guest }) {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                minLength={isRegister || isReset ? 8 : 1}
-                required
               />
+              {fieldErrors.password && (
+                <span className="field-error">{fieldErrors.password}</span>
+              )}
             </Field>
           )}
 
-          {isReset && (
-            <Field label="Confirm new password">
+          {(isRegister || isReset) && (
+            <Field label="Confirm password">
               <input
                 type="password"
                 name="confirmPassword"
                 value={form.confirmPassword}
                 onChange={handleChange}
-                minLength={8}
-                required
               />
+              {fieldErrors.confirmPassword && (
+                <span className="field-error">{fieldErrors.confirmPassword}</span>
+              )}
             </Field>
           )}
 

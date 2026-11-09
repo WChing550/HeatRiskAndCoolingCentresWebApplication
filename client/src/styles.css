@@ -1094,6 +1094,14 @@ select:focus-visible {
   background: white
 }
 
+.field-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #dc2626 !important; /* Bright red error text */
+  font-weight: 500;
+}
+
 .field textarea {
   resize: vertical;
   line-height: 1.6
