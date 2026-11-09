@@ -2,12 +2,38 @@ import React, { useEffect, useState } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
 import { ClipboardList, Clock3, XCircle, Download, Printer, ThermometerSun, Gauge, TrendingUp, Activity, CheckCircle2 } from 'lucide-react';
 import { api, dt } from '../../lib/api.js';
+import './analytics-print.css';
 
 const RISK_COLORS = { Low: '#35a57a', Moderate: '#e5a13a', High: '#dc5a4f' };
 const num = (v, unit = '') => (v == null ? '—' : v + unit);
 const shortDay = value => new Date(value + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const hourLabel = h => `${String(h).padStart(2, '0')}:00`;
 const chartOpts = (legend = false) => ({ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: legend, position: 'bottom' } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#edf1f4' } } } });
+
+function AnalyticsChart({ component: Chart, data, wide = false }) {
+  const options = chartOpts(wide);
+  const printOptions = {
+    ...options,
+    responsive: false,
+    animation: false,
+    devicePixelRatio: 2,
+    scales: {
+      x: { ...options.scales.x, ticks: { maxRotation: 0, maxTicksLimit: wide ? 9 : 7 } },
+      y: options.scales.y,
+    },
+  };
+
+  return (
+    <>
+      <div className={wide ? 'chart tall no-print' : 'chart no-print'}>
+        <Chart data={data} options={options} />
+      </div>
+      <div className="analytics-print-chart print-only" aria-hidden="true">
+        <Chart data={data} options={printOptions} width={wide ? 660 : 310} height={wide ? 190 : 170} />
+      </div>
+    </>
+  );
+}
 
 function Change({ cur, prev, unit = '', goodWhenDown = true }) {
   if (cur == null || prev == null) return <span className="delta flat">—</span>;
@@ -19,16 +45,16 @@ function Change({ cur, prev, unit = '', goodWhenDown = true }) {
 
 function csvCell(value) {
   let s = value == null ? '' : String(value);
-  if (typeof value === 'string' && /^[=+\-@]/.test(s)) s = "'" + s; // neutralise spreadsheet formulas
+  if (typeof value === 'string' && /^(?:\s*[=+\-@]|[\t\r\n])/.test(s)) s = "'" + s; // neutralise spreadsheet formulas
   return `"${s.replace(/"/g, '""')}"`;
 }
 
 function exportCsv(data) {
-  const { current: c, previous: p } = data;
+  const { current: c, previous: p, reports } = data;
   const rows = [
     ['HeatSafe KL — heat-risk analytics'],
     ['Period', `Last ${data.days} days`],
-    ['Generated', new Date(data.generatedAt).toLocaleString()],
+    ['Generated (UTC)', new Date(data.generatedAt).toISOString()],
     ['Time zone for days and hours', data.timezone],
     [],
     ['SUMMARY', 'Selected period', 'Previous period'],
@@ -40,19 +66,37 @@ function exportCsv(data) {
     ['Moderate-risk readings', c.moderate, p.moderate],
     ['High-risk readings', c.high, p.high],
     [],
-    ['DAILY', 'Average temperature (°C)', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Readings', 'Low', 'Moderate', 'High'],
+    ['RISK FREQUENCY'],
+    ['Risk level', 'Readings', 'Share (%)'],
+    ...Object.keys(RISK_COLORS).map(level => {
+      const count = c[level.toLowerCase()];
+      return [level, count, c.readings ? Math.round(100 * count / c.readings) : null];
+    }),
+    [],
+    ['DAILY READINGS'],
+    ['Date', 'Average temperature (°C)', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Readings', 'Low', 'Moderate', 'High'],
     ...data.daily.map(d => [d.day, d.avg_temp, d.avg_hi, d.max_hi, d.readings, d.low, d.moderate, d.high]),
     [],
-    ['PEAK READINGS', 'Heat index (°C)', 'Temperature (°C)', 'Humidity (%)', 'Risk', 'City'],
-    ...data.peakReadings.map(r => [new Date(r.observed_at).toLocaleString(), r.heat_index_c, r.temperature_c, r.humidity, r.risk_level, r.city]),
+    ['PEAK READINGS'],
+    ['Date & time (UTC)', 'Heat index (°C)', 'Temperature (°C)', 'Humidity (%)', 'Risk', 'City'],
+    ...data.peakReadings.map(r => [new Date(r.observed_at).toISOString(), r.heat_index_c, r.temperature_c, r.humidity, r.risk_level, r.city]),
     [],
-    ['AVERAGE HEAT INDEX BY HOUR', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Readings'],
+    ['PEAK HEAT HOURS'],
+    ['Hour', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Readings'],
     ...data.hourly.map(h => [hourLabel(h.hour), h.avg_hi, h.max_hi, h.readings]),
     [],
-    ['SAMPLED LOCATIONS (~1 km cells)', 'Latitude', 'Longitude', 'Readings', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Risk of average'],
-    ...data.locations.map(l => ['', l.lat, l.lon, l.readings, l.avg_hi, l.max_hi, l.risk_level])
+    ['SAMPLED LOCATIONS (~1 km cells)'],
+    ['Latitude', 'Longitude', 'Readings', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Risk of average'],
+    ...data.locations.map(l => [l.lat, l.lon, l.readings, l.avg_hi, l.max_hi, l.risk_level]),
+    [],
+    ['COMMUNITY REPORTS'],
+    ['Submitted', 'Approved', 'Pending review', 'Rejected'],
+    [reports.submitted, reports.approved, reports.pending, reports.rejected],
   ];
-  const csv = '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const columns = Math.max(...rows.map(row => row.length));
+  const csv = '\ufeff' + rows.map(row =>
+    Array.from({ length: columns }, (_, index) => csvCell(row[index])).join(',')
+  ).join('\r\n') + '\r\n';
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
@@ -79,13 +123,14 @@ function AdvancedAnalytics({ ctx }) {
     return () => { cancelled = true; };
   }, [days]);
 
+  const canExport = data?.days === days && !loading;
   const toolbar = (
     <div className="toolbar no-print">
       <select value={days} onChange={e => setDays(Number(e.target.value))} aria-label="Analysis period">
         <option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option>
       </select>
-      <button className="btn secondary" disabled={!data || !data.current.readings} onClick={() => exportCsv(data)}><Download size={15} /> Export CSV</button>
-      <button className="btn secondary" disabled={!data} onClick={() => window.print()} title="Opens the print dialog — choose “Save as PDF”"><Printer size={15} /> Export PDF</button>
+      <button className="btn secondary" disabled={!canExport || !data?.current.readings} onClick={() => exportCsv(data)}><Download size={15} /> Export CSV</button>
+      <button className="btn secondary" disabled={!canExport} onClick={() => window.print()} title="Opens the print dialog — choose “Save as PDF”"><Printer size={15} /> Export PDF</button>
       {loading && data && <small>Updating…</small>}
     </div>
   );
@@ -110,10 +155,10 @@ function AdvancedAnalytics({ ctx }) {
   const hourData = { labels: hourly.map(h => hourLabel(h.hour)), datasets: [{ label: 'Average heat index °C', data: hourly.map(h => h.avg_hi), backgroundColor: hourly.map(h => (data.peakHour && h.hour === data.peakHour.hour ? '#dc5a4f' : '#f0a07d')), borderRadius: 6 }] };
 
   return (
-    <>
+    <div className="analytics-report">
       {toolbar}
 
-      <div className="print-only" style={{ marginBottom: 14 }}>
+      <div className="analytics-print-heading print-only" style={{ marginBottom: 14 }}>
         <h2 style={{ margin: 0 }}>HeatSafe KL — Heat-risk analytics report</h2>
         <p style={{ margin: '4px 0 0', fontSize: 12 }}>Period: last {data.days} days · Generated {dt(data.generatedAt)} · Days and hours in {data.timezone}</p>
       </div>
@@ -130,16 +175,16 @@ function AdvancedAnalytics({ ctx }) {
           </div>
 
           <Panel title="Daily temperature & heat index" sub={`Average and maximum per day · last ${data.days} days`}>
-            <div className="chart tall"><Line data={lineData} options={chartOpts(true)} /></div>
+            <AnalyticsChart component={Line} data={lineData} wide />
           </Panel>
 
           <div className="columns">
             <Panel title="Risk frequency" sub={`Readings by risk level · ${c.readings} total`}>
-              <div className="chart"><Bar data={riskData} options={chartOpts()} /></div>
+              <AnalyticsChart component={Bar} data={riskData} />
               <p className="muted" style={{ marginTop: 10 }}>Low {c.low} ({pct(c.low)}%) · Moderate {c.moderate} ({pct(c.moderate)}%) · High {c.high} ({pct(c.high)}%)</p>
             </Panel>
             <Panel title="Peak heat hours" sub={data.peakHour ? `Hottest on average around ${hourLabel(data.peakHour.hour)} (${data.peakHour.avg_hi}°C)` : 'Average heat index by hour of day'}>
-              <div className="chart"><Bar data={hourData} options={chartOpts()} /></div>
+              <AnalyticsChart component={Bar} data={hourData} />
             </Panel>
           </div>
 
@@ -188,7 +233,7 @@ function AdvancedAnalytics({ ctx }) {
           <Metric icon={XCircle} label="Rejected" value={reports.rejected} note="Excluded from verified data" color="purple" />
         </div>
       </Panel>
-    </>
+    </div>
   );
 }
 

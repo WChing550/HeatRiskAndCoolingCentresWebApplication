@@ -934,34 +934,34 @@
 }
 
 
-/* Reveal the admin address inside the existing card without resizing it. */
-.admin-shell .centre-tile--reveal {
+/* Reveal the address inside the existing card without resizing it. */
+.centre-tile--reveal {
     --centre-address-height: 72px;
     display: block;
     align-self: start;
 }
 
-.admin-shell .centre-tile--reveal,
-.admin-shell .centre-tile--reveal:hover,
-.admin-shell .centre-tile--reveal:focus-visible {
+.centre-tile--reveal,
+.centre-tile--reveal:hover,
+.centre-tile--reveal:focus-visible {
     transform: none;
     box-shadow: 4px 4px 0 #8797a2;
 }
 
-.admin-shell .centre-tile--reveal .centre-tile-photo {
+.centre-tile--reveal .centre-tile-photo {
     position: relative;
     z-index: 0;
     transition: transform 460ms cubic-bezier(.22, .61, .36, 1);
 }
 
-.admin-shell .centre-tile--reveal img,
-.admin-shell .centre-tile--reveal:hover img,
-.admin-shell .centre-tile--reveal:focus-visible img {
+.centre-tile--reveal img,
+.centre-tile--reveal:hover img,
+.centre-tile--reveal:focus-visible img {
     transform: none;
     transition: none;
 }
 
-.admin-shell .centre-tile--reveal .centre-tile-caption {
+.centre-tile--reveal .centre-tile-caption {
     position: relative;
     z-index: 1;
     height: auto;
@@ -970,7 +970,7 @@
     transition: transform 460ms cubic-bezier(.22, .61, .36, 1);
 }
 
-.admin-shell .centre-tile--reveal h3 {
+.centre-tile--reveal h3 {
     box-sizing: border-box;
     height: auto;
     margin: 0;
@@ -984,7 +984,7 @@
     overflow: hidden;
 }
 
-.admin-shell .centre-tile--reveal .centre-tile-address {
+.centre-tile--reveal .centre-tile-address {
     box-sizing: border-box;
     position: absolute;
     top: 100%;
@@ -1008,35 +1008,35 @@
     flex-wrap: nowrap;
 }
 
-.admin-shell .centre-tile--reveal:focus-visible .centre-tile-photo,
-.admin-shell .centre-tile--reveal:focus-visible .centre-tile-caption {
+.centre-tile--reveal:focus-visible .centre-tile-photo,
+.centre-tile--reveal:focus-visible .centre-tile-caption {
     transform: translateY(calc(-1 * var(--centre-address-height)));
 }
 
-.admin-shell .centre-tile--reveal:focus-visible .centre-tile-address {
+.centre-tile--reveal:focus-visible .centre-tile-address {
     opacity: 1;
 }
 
-.admin-shell .centre-tile--reveal:hover .centre-tile-photo,
-    .admin-shell .centre-tile--reveal:hover .centre-tile-caption {
+.centre-tile--reveal:hover .centre-tile-photo,
+    .centre-tile--reveal:hover .centre-tile-caption {
     transform: translateY(calc(-1 * var(--centre-address-height)));
 }
 
-.admin-shell .centre-tile--reveal:hover .centre-tile-address {
+.centre-tile--reveal:hover .centre-tile-address {
     opacity: 1;
     transition-delay: 80ms;
 }
 
-.motion-paused .admin-shell .centre-tile--reveal .centre-tile-photo,
-.motion-paused .admin-shell .centre-tile--reveal .centre-tile-caption,
-.motion-paused .admin-shell .centre-tile--reveal .centre-tile-address {
+.motion-paused .centre-tile--reveal .centre-tile-photo,
+.motion-paused .centre-tile--reveal .centre-tile-caption,
+.motion-paused .centre-tile--reveal .centre-tile-address {
     transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .admin-shell .centre-tile--reveal .centre-tile-photo,
-    .admin-shell .centre-tile--reveal .centre-tile-caption,
-    .admin-shell .centre-tile--reveal .centre-tile-address {
+    .centre-tile--reveal .centre-tile-photo,
+    .centre-tile--reveal .centre-tile-caption,
+    .centre-tile--reveal .centre-tile-address {
         transition: none;
     }
 }
@@ -1045,7 +1045,7 @@
 
 
 /* Compact address details; the reveal distance is measured from this row. */
-.admin-shell .centre-tile-location-icon {
+.centre-tile-location-icon {
     display: grid;
     place-items: center;
     width: 28px;
@@ -1057,16 +1057,16 @@
     flex: 0 0 28px;
 }
 
-.admin-shell .centre-tile-location-icon svg {
+.centre-tile-location-icon svg {
     display: block;
 }
 
-.admin-shell .centre-tile-address-copy {
+.centre-tile-address-copy {
     min-width: 0;
     flex: 1 1 0;
 }
 
-.admin-shell .centre-tile-address-copy p {
+.centre-tile-address-copy p {
     margin: 0;
     font-size: 12px;
     line-height: 1.55;
@@ -1110,47 +1110,47 @@
 }
 
 
-/* Four larger admin cards per desktop row; keep smaller screens readable. */
-.admin-shell .centre-tiles {
+/* Shared cooling centre grid for public, registered and admin users. */
+.centre-tiles {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
     align-items: start;
 }
 
 @media (max-width: 1199px) {
-    .admin-shell .centre-tiles {
+    .centre-tiles {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 959px) {
-    .admin-shell .centre-tiles {
+    .centre-tiles {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 699px) {
-    .admin-shell .centre-tiles {
+    .centre-tiles {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
     }
 }
 
 @media (max-width: 439px) {
-    .admin-shell .centre-tiles {
+    .centre-tiles {
         grid-template-columns: minmax(0, 1fr);
     }
 }
 
 
-/* Give the four desktop cards more room without changing other admin pages. */
+/* Give the four desktop cards more room on the directory page. */
 @media (min-width: 1200px) {
-    .admin-shell .content:has(.centre-tiles) {
+    .premium-shell .content:has(.centre-tiles) {
         max-width: 1680px;
         padding-inline: 28px;
     }
 
-    .admin-shell .centre-tiles {
+    .centre-tiles {
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
     }
@@ -1286,4 +1286,23 @@
 @media (max-width: 600px) {
     .heat-calculation-steps { grid-template-columns: minmax(0, 1fr); }
     .heat-formula-block pre { font-size: 11px; padding: 12px; }
+}
+
+
+/* Keep the dropdown arrow inset without changing native select behaviour. */
+.premium-shell select:not([multiple]):not([size]) {
+    appearance: none;
+    padding-inline-end: 38px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 6 5 5 5-5' fill='none' stroke='%23526471' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: right 6px center;
+    background-repeat: no-repeat;
+    background-size: 15px 15px;
+}
+
+@media (forced-colors: active) {
+    .premium-shell select:not([multiple]):not([size]) {
+        appearance: auto;
+        background-image: none;
+        padding-inline-end: 12px;
+    }
 }

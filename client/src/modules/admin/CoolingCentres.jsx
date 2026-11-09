@@ -15,12 +15,12 @@ function DetailRow({ icon: Icon, label, children }) {
   return <div className="centre-detail-row"><span className="centre-detail-icon"><Icon size={16} /></span><div><small>{label}</small><div>{children || 'Not provided'}</div></div></div>;
 }
 
-function CentreTile({ centre, isAdmin, onOpen }) {
+function CentreTile({ centre, onOpen }) {
   const tile = useRef(null);
   const address = useRef(null);
 
   useLayoutEffect(() => {
-    if (!isAdmin || !tile.current || !address.current) return;
+    if (!tile.current || !address.current) return;
 
     // Reveal exactly the address row height without reserving blank space.
     const measure = () => {
@@ -40,7 +40,7 @@ function CentreTile({ centre, isAdmin, onOpen }) {
       observer?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [isAdmin, centre.address]);
+  }, [centre.address]);
 
   const cover = centrePhotos(centre)[0];
 
@@ -48,28 +48,26 @@ function CentreTile({ centre, isAdmin, onOpen }) {
     <button
       ref={tile}
       type="button"
-      className={'centre-tile' + (isAdmin ? ' centre-tile--reveal' : '')}
+      className="centre-tile centre-tile--reveal"
       onClick={() => onOpen(centre)}
-      aria-label={isAdmin ? `${centre.name}. Address: ${centre.address}` : centre.name}
+      aria-label={`${centre.name}. Address: ${centre.address}`}
     >
       <div className="centre-tile-photo">
         {cover
           ? <img src={asset(cover)} alt="" loading="lazy" />
           : <Building2 size={40} />}
       </div>
-      {isAdmin ? (
-        <div className="centre-tile-caption">
-          <h3>{centre.name}</h3>
-          <div ref={address} className="centre-tile-address">
-            <span className="centre-tile-location-icon" aria-hidden="true">
-              <MapPin size={18} />
-            </span>
-            <div className="centre-tile-address-copy">
-              <p>{centre.address}</p>
-            </div>
+      <div className="centre-tile-caption">
+        <h3>{centre.name}</h3>
+        <div ref={address} className="centre-tile-address">
+          <span className="centre-tile-location-icon" aria-hidden="true">
+            <MapPin size={18} />
+          </span>
+          <div className="centre-tile-address-copy">
+            <p>{centre.address}</p>
           </div>
         </div>
-      ) : <h3>{centre.name}</h3>}
+      </div>
     </button>
   );
 }
@@ -248,7 +246,6 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
           <CentreTile
             key={centre.id}
             centre={centre}
-            isAdmin={isAdmin}
             onOpen={openCentre}
           />
         ))}

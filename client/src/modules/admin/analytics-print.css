@@ -1,0 +1,137 @@
+@page analytics {
+    size: A4 portrait;
+    margin: 12mm;
+}
+
+@media print {
+    html:has(.analytics-report) {
+        --paper: #fff;
+        background: #fff;
+    }
+
+    body:has(.analytics-report) {
+        page: analytics;
+        background: #fff !important;
+    }
+
+    #root:has(.analytics-report),
+    .admin-shell:has(.analytics-report),
+    .admin-shell .main:has(.analytics-report),
+    .admin-shell .content:has(.analytics-report) {
+        min-height: 0;
+        max-width: none;
+        overflow: visible;
+        background: #fff !important;
+        opacity: 1;
+        animation: none;
+        transform: none;
+    }
+
+    .admin-shell .analytics-report {
+        width: 100%;
+        padding-inline: .5mm;
+        color: #303844;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .analytics-print-heading {
+        break-after: avoid;
+    }
+
+    .admin-shell .analytics-report .metrics,
+    .admin-shell .analytics-report .columns {
+        display: grid;
+        gap: 3mm;
+        margin: 0 0 3mm;
+        break-inside: avoid;
+    }
+
+    .admin-shell .analytics-report .metrics {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .admin-shell .analytics-report .columns {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-shell .analytics-report .panel,
+    .admin-shell .analytics-report .metric {
+        min-width: 0;
+        border: 1px solid #adb9c4;
+        border-radius: 2mm;
+        background: #fff;
+        box-shadow: none;
+        break-inside: avoid;
+    }
+
+    .admin-shell .analytics-report .panel {
+        margin: 0 0 3mm;
+        padding: 3mm;
+    }
+
+    .admin-shell .analytics-report .columns > .panel {
+        margin: 0;
+    }
+
+    .admin-shell .analytics-report .columns + .panel {
+        break-before: page;
+    }
+
+    .admin-shell .analytics-report .panelhead {
+        margin-bottom: 2.5mm;
+    }
+
+    .admin-shell .analytics-report .panelhead h3 {
+        font-family: Arial, sans-serif;
+        font-size: 11pt;
+    }
+
+    .admin-shell .analytics-report .metric {
+        min-height: 0;
+        padding: 2.5mm;
+        gap: 2mm;
+        opacity: 1;
+        animation: none;
+        transform: none;
+        transition: none;
+    }
+
+    .admin-shell .analytics-report .metric b {
+        font-family: Arial, sans-serif;
+        font-size: 15pt;
+    }
+
+    .analytics-print-chart {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .analytics-print-chart canvas {
+        display: block;
+        width: 100% !important;
+        height: auto !important;
+    }
+
+    .admin-shell .analytics-report .tablewrap {
+        overflow: visible;
+    }
+
+    .admin-shell .analytics-report table {
+        width: 100%;
+        min-width: 0;
+        table-layout: fixed;
+    }
+
+    .admin-shell .analytics-report th,
+    .admin-shell .analytics-report td {
+        padding: 1.5mm 2mm;
+        font-size: 8.5pt;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .analytics-report tr {
+        break-inside: avoid;
+    }
+}
