@@ -11,18 +11,40 @@ import { api, asset, status } from '../../lib/api.js';
 
 const EMPTY_CENTRE = { name: '', address: '', latitude: '3.1390', longitude: '101.6869', operatingHours: '', contact: '', description: '', facilities: '', capacity: '', status: 'open' };
 
-function DetailRow({ icon: Icon, label, children }) {
-  return <div className="centre-detail-row"><span className="centre-detail-icon"><Icon size={16} /></span><div><small>{label}</small><div>{children || 'Not provided'}</div></div></div>;
+// Haversine formula to calculate straight-line distance in kilometers
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
-function CentreTile({ centre, onOpen }) {
+function DetailRow({ icon: Icon, label, children }) {
+  return (
+    <div className="centre-detail-row">
+      <span className="centre-detail-icon"><Icon size={16} /></span>
+      <div>
+        <small>{label}</small>
+        <div>{children || 'Not provided'}</div>
+      </div>
+    </div>
+  );
+}
+
+function CentreTile({ centre, onOpen, distance }) {
   const tile = useRef(null);
   const address = useRef(null);
 
   useLayoutEffect(() => {
     if (!tile.current || !address.current) return;
 
-    // Reveal exactly the address row height without reserving blank space.
     const measure = () => {
       if (!tile.current || !address.current) return;
       const height = Math.ceil(address.current.getBoundingClientRect().height);
@@ -30,9 +52,7 @@ function CentreTile({ centre, onOpen }) {
     };
 
     measure();
-    const observer = typeof ResizeObserver === 'undefined'
-      ? null
-      : new ResizeObserver(measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(address.current);
     window.addEventListener('resize', measure);
 
@@ -52,10 +72,25 @@ function CentreTile({ centre, onOpen }) {
       onClick={() => onOpen(centre)}
       aria-label={`${centre.name}. Address: ${centre.address}`}
     >
-      <div className="centre-tile-photo">
-        {cover
-          ? <img src={asset(cover)} alt="" loading="lazy" />
-          : <Building2 size={40} />}
+      <div className="centre-tile-photo" style={{ position: 'relative' }}>
+        {cover ? <img src={asset(cover)} alt="" loading="lazy" /> : <Building2 size={40} />}
+        {distance != null && (
+          <span
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '8px',
+              background: 'rgba(0, 0, 0, 0.75)',
+              color: '#fff',
+              padding: '3px 8px',
+              borderRadius: '12px',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+            }}
+          >
+            {distance.toFixed(1)} km
+          </span>
+        )}
       </div>
       <div className="centre-tile-caption">
         <h3>{centre.name}</h3>
@@ -76,44 +111,93 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
   const [search, setSearch] = useState('');
   const [centreEdit, setCentreEdit] = useState(null);
   const [selectedId, setSelectedId] = useState(() => location.hash.match(/^#\/centres\/(\d+)$/)?.[1] || null);
-  const [photos, setPhotos] = useState([]), [cropping, setCropping] = useState(false), [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState([]);
+  const [cropping, setCropping] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [cf, setCf] = useState({ ...EMPTY_CENTRE });
-  const [matchedLocation, setMatchedLocation] = useState(null), [addressConfirmed, confirmAddress] = useState(false), [verifying, setVerifying] = useState(false);
-  const unchangedLocation = Boolean(centreEdit && cf.address.trim() === (centreEdit.address||'').trim() && Math.abs(Number(cf.latitude)-Number(centreEdit.latitude)) < .0000005 && Math.abs(Number(cf.longitude)-Number(centreEdit.longitude)) < .0000005);
-  const locationReady = unchangedLocation || Boolean(matchedLocation && addressConfirmed);
-  useEffect(() => { const sync = () => setSelectedId(location.hash.match(/^#\/centres\/(\d+)$/)?.[1] || null); window.addEventListener('hashchange',sync); return () => window.removeEventListener('hashchange',sync); }, []);
-  const selectedCentre = centres.find(c => String(c.id) === String(selectedId) && (isAdmin || isPublishedCentre(c)));
-  function openCentre(centre) {
-    if (!location.hash.startsWith('#/centres')) history.replaceState(null,'',location.pathname+location.search+'#/centres');
-    location.hash='/centres/'+centre.id;
-    setSelectedId(String(centre.id));
-    window.scrollTo({top:0,behavior:'instant'});
-  }
-  function closeDetails() { history.replaceState(null,'',location.pathname+location.search+'#/centres'); setSelectedId(null); window.scrollTo({top:0,behavior:'instant'}); }
+  const [matchedLocation, setMatchedLocation] = useState(null);
+  const [addressConfirmed, confirmAddress] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
-  const filteredCentres = useMemo(
-    () => centres.filter(c => isPublishedCentre(c) && `${c.name} ${c.address}`.toLowerCase().includes(search.toLowerCase())),
-    [centres, search]
+  const unchangedLocation = Boolean(
+    centreEdit &&
+      cf.address.trim() === (centreEdit.address || '').trim() &&
+      Math.abs(Number(cf.latitude) - Number(centreEdit.latitude)) < 0.0000005 &&
+      Math.abs(Number(cf.longitude) - Number(centreEdit.longitude)) < 0.0000005
   );
+  const locationReady = unchangedLocation || Boolean(matchedLocation && addressConfirmed);
+
+  useEffect(() => {
+    const sync = () => setSelectedId(location.hash.match(/^#\/centres\/(\d+)$/)?.[1] || null);
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  const selectedCentre = centres.find(c => String(c.id) === String(selectedId) && (isAdmin || isPublishedCentre(c)));
+
+  function openCentre(centre) {
+    if (!location.hash.startsWith('#/centres')) history.replaceState(null, '', location.pathname + location.search + '#/centres');
+    location.hash = '/centres/' + centre.id;
+    setSelectedId(String(centre.id));
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function closeDetails() {
+    history.replaceState(null, '', location.pathname + location.search + '#/centres');
+    setSelectedId(null);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  // Filter centres and calculate distance / sort nearest if userCoords are detected
+  const filteredCentres = useMemo(() => {
+    return centres
+      .filter(c => isPublishedCentre(c) && `${c.name} ${c.address}`.toLowerCase().includes(search.toLowerCase()))
+      .map(c => {
+        let distance = null;
+        if (userCoords?.latitude && userCoords?.longitude && c.latitude && c.longitude) {
+          distance = getDistanceKm(
+            Number(userCoords.latitude),
+            Number(userCoords.longitude),
+            Number(c.latitude),
+            Number(c.longitude)
+          );
+        }
+        return { ...c, distance };
+      })
+      .sort((a, b) => {
+        if (a.distance !== null && b.distance !== null) {
+          return a.distance - b.distance; // Nearest first
+        }
+        return 0;
+      });
+  }, [centres, search, userCoords]);
+
   const setCentreField = (key, value) => setCf(previous => ({ ...previous, [key]: value }));
 
   function editCentre(centre) {
     closeDetails();
     setCentreEdit(centre || null);
-    setCf(centre ? {
-      name: centre.name || '',
-      address: centre.address || '',
-      latitude: centre.latitude ?? '',
-      longitude: centre.longitude ?? '',
-      operatingHours: centre.operating_hours || '',
-      contact: centre.contact || '',
-      description: centre.description || '',
-      facilities: (centre.facilities || []).join(', '),
-      capacity: centre.capacity ?? '',
-      status: centre.status || 'open'
-    } : { ...EMPTY_CENTRE });
-    setPhotos(centrePhotos(centre).map(url=>({id:url,kind:'existing',savedUrl:url,url:asset(url)})));
-    setCropping(false); setMatchedLocation(null); confirmAddress(false); setVerifying(false);
+    setCf(
+      centre
+        ? {
+            name: centre.name || '',
+            address: centre.address || '',
+            latitude: centre.latitude ?? '',
+            longitude: centre.longitude ?? '',
+            operatingHours: centre.operating_hours || '',
+            contact: centre.contact || '',
+            description: centre.description || '',
+            facilities: (centre.facilities || []).join(', '),
+            capacity: centre.capacity ?? '',
+            status: centre.status || 'open',
+          }
+        : { ...EMPTY_CENTRE }
+    );
+    setPhotos(centrePhotos(centre).map(url => ({ id: url, kind: 'existing', savedUrl: url, url: asset(url) })));
+    setCropping(false);
+    setMatchedLocation(null);
+    confirmAddress(false);
+    setVerifying(false);
     setPage('centreform');
   }
 
@@ -122,25 +206,40 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
     const formData = new FormData();
     Object.entries(cf).forEach(([key, value]) => formData.append(key, String(value)));
     if (cropping || saving || verifying) return;
-    if (!locationReady) { setError('Verify and confirm the centre address before saving.'); return; }
-    if (matchedLocation) formData.append('locationToken',matchedLocation.locationToken);
-    formData.append('addressConfirmed',String(addressConfirmed));
+    if (!locationReady) {
+      setError('Verify and confirm the centre address before saving.');
+      return;
+    }
+    if (matchedLocation) formData.append('locationToken', matchedLocation.locationToken);
+    formData.append('addressConfirmed', String(addressConfirmed));
+
     let newIndex = 0;
-    const order = photos.map(photo => { if (photo.kind === 'existing') return 'existing:' + photo.savedUrl; formData.append('images',photo.file); return 'new:' + newIndex++; });
-    formData.append('photoOrder',JSON.stringify(order));
+    const order = photos.map(photo => {
+      if (photo.kind === 'existing') return 'existing:' + photo.savedUrl;
+      formData.append('images', photo.file);
+      return 'new:' + newIndex++;
+    });
+    formData.append('photoOrder', JSON.stringify(order));
+
     setSaving(true);
     try {
       const saved = await api(centreEdit ? `/admin/centres/${centreEdit.id}` : '/admin/centres', {
         method: centreEdit ? 'PUT' : 'POST',
-        body: formData
+        body: formData,
       });
-      setSuccess(saved.verified ? 'Cooling centre and photo gallery saved.' : 'Centre saved. Review it in Verification before it appears in Cooling Centres.');
+      setSuccess(
+        saved.verified
+          ? 'Cooling centre and photo gallery saved.'
+          : 'Centre saved. Review it in Verification before it appears in Cooling Centres.'
+      );
       closeDetails();
       setPage(saved.verified ? 'centres' : 'verification');
       await refresh();
     } catch (error) {
       setError(error.message);
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function delCentre(centre) {
@@ -165,7 +264,29 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
           </div>
         </header>
 
-        <CentreAddressVerifier form={cf} matched={matchedLocation} confirmed={addressConfirmed} unchanged={unchangedLocation} onBusy={setVerifying} onConfirm={confirmAddress} onAddress={address=>{setCf(previous=>({...previous,address,latitude:'',longitude:''}));setMatchedLocation(null);confirmAddress(false);}} onMatch={result=>{setCf(previous=>({...previous,address:result.address,latitude:String(result.latitude),longitude:String(result.longitude)}));setMatchedLocation(result);confirmAddress(false);}}/>
+        <CentreAddressVerifier
+          form={cf}
+          matched={matchedLocation}
+          confirmed={addressConfirmed}
+          unchanged={unchangedLocation}
+          onBusy={setVerifying}
+          onConfirm={confirmAddress}
+          onAddress={address => {
+            setCf(previous => ({ ...previous, address, latitude: '', longitude: '' }));
+            setMatchedLocation(null);
+            confirmAddress(false);
+          }}
+          onMatch={result => {
+            setCf(previous => ({
+              ...previous,
+              address: result.address,
+              latitude: String(result.latitude),
+              longitude: String(result.longitude),
+            }));
+            setMatchedLocation(result);
+            confirmAddress(false);
+          }}
+        />
 
         <form className="formgrid" onSubmit={saveCentre}>
           {[
@@ -199,7 +320,9 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
             <textarea rows="3" value={cf.description ?? ''} onChange={e => setCentreField('description', e.target.value)} />
           </Field>
 
-          <div className="span2"><CentrePhotoEditor value={photos} onChange={setPhotos} onBusyChange={setCropping}/></div>
+          <div className="span2">
+            <CentrePhotoEditor value={photos} onChange={setPhotos} onBusyChange={setCropping} />
+          </div>
 
           <div className="check span2">
             <span>
@@ -210,12 +333,32 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
                   : 'New centres are saved as Pending and are not shown to the public until an inspection is recorded in Centre Verification.'}
               </small>
             </span>
-            {centreEdit && <button type="button" className="btn secondary" onClick={() => setPage('verification')}>Open verification</button>}
+            {centreEdit && (
+              <button type="button" className="btn secondary" onClick={() => setPage('verification')}>
+                Open verification
+              </button>
+            )}
           </div>
 
           <div className="actions span2">
-            <button type="button" className="btn secondary" onClick={() => setPage('centres')}>Cancel</button>
-            <button type="submit" className="btn primary" disabled={saving || cropping || verifying || !locationReady}>{saving ? 'Saving gallery…' : cropping ? 'Finish cropping photos first' : !locationReady ? 'Verify and confirm address first' : centreEdit ? 'Save changes' : 'Add centre'}</button>
+            <button type="button" className="btn secondary" onClick={() => setPage('centres')}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn primary"
+              disabled={saving || cropping || verifying || !locationReady}
+            >
+              {saving
+                ? 'Saving gallery…'
+                : cropping
+                ? 'Finish cropping photos first'
+                : !locationReady
+                ? 'Verify and confirm address first'
+                : centreEdit
+                ? 'Save changes'
+                : 'Add centre'}
+            </button>
           </div>
         </form>
       </section>
@@ -224,8 +367,78 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
 
   if (selectedId && page !== 'centreform') {
     if (!loaded) return <div className="panel" role="status">Loading cooling centre…</div>;
-    if (!selectedCentre) return <section className="panel"><button className="btn secondary" onClick={closeDetails}><ArrowLeft size={15}/>Back to cooling centres</button><Empty title="Centre unavailable" text="This centre may have been removed or is not currently published."/></section>;
-    return <section className="centre-details-page"><div className="centre-details-toolbar"><button className="btn secondary" onClick={closeDetails}><ArrowLeft size={15}/>Back to cooling centres</button>{isAdmin&&<div><button className="btn secondary" onClick={()=>setPage('verification')}>Verification</button><button className="btn primary" onClick={()=>editCentre(selectedCentre)}>Edit centre</button><button className="btn danger-outline" onClick={()=>delCentre(selectedCentre)}>Delete centre</button></div>}</div><header className="centre-details-title"><small className="eyebrow">COOLING CENTRE DETAILS</small><h2>{selectedCentre.name}</h2><div className="centre-modal-badges"><span className={'pill '+selectedCentre.status}>{status(selectedCentre.status)}</span>{selectedCentre.verified?<span className="centre-verified"><CheckCircle2 size={14}/>Verified facility</span>:<span className="pill pending">Verification: {status(selectedCentre.effective_status||'pending')}</span>}</div></header><div className="centre-details-layout"><CentreGallery key={selectedCentre.id} photos={centrePhotos(selectedCentre)} name={selectedCentre.name}/><section className="panel centre-details-info"><h3>About this cooling centre</h3><div className="centre-detail-grid"><DetailRow icon={MapPin} label="Address">{selectedCentre.address}</DetailRow><DetailRow icon={Clock3} label="Operating hours">{selectedCentre.operating_hours}</DetailRow><DetailRow icon={Phone} label="Contact">{selectedCentre.contact}</DetailRow><DetailRow icon={Users} label="Capacity">{selectedCentre.capacity??'Not provided'}</DetailRow><DetailRow icon={MapPin} label="Coordinates">{`${selectedCentre.latitude}, ${selectedCentre.longitude}`}</DetailRow>{isAdmin&&<><DetailRow icon={CheckCircle2} label="Last inspection">{selectedCentre.last_inspection_date}</DetailRow><DetailRow icon={Clock3} label="Next inspection due">{selectedCentre.next_inspection_date}</DetailRow></>}<DetailRow icon={Wrench} label="Facilities">{selectedCentre.facilities?.join(', ')}</DetailRow></div><div className="centre-detail-description"><small>Description</small><p>{selectedCentre.description||'No description provided.'}</p></div></section></div><CentreLocationMap centre={selectedCentre}/></section>;
+    if (!selectedCentre)
+      return (
+        <section className="panel">
+          <button className="btn secondary" onClick={closeDetails}>
+            <ArrowLeft size={15} />Back to cooling centres
+          </button>
+          <Empty title="Centre unavailable" text="This centre may have been removed or is not currently published." />
+        </section>
+      );
+    return (
+      <section className="centre-details-page">
+        <div className="centre-details-toolbar">
+          <button className="btn secondary" onClick={closeDetails}>
+            <ArrowLeft size={15} />Back to cooling centres
+          </button>
+          {isAdmin && (
+            <div>
+              <button className="btn secondary" onClick={() => setPage('verification')}>
+                Verification
+              </button>
+              <button className="btn primary" onClick={() => editCentre(selectedCentre)}>
+                Edit centre
+              </button>
+              <button className="btn danger-outline" onClick={() => delCentre(selectedCentre)}>
+                Delete centre
+              </button>
+            </div>
+          )}
+        </div>
+        <header className="centre-details-title">
+          <small className="eyebrow">COOLING CENTRE DETAILS</small>
+          <h2>{selectedCentre.name}</h2>
+          <div className="centre-modal-badges">
+            <span className={'pill ' + selectedCentre.status}>{status(selectedCentre.status)}</span>
+            {selectedCentre.verified ? (
+              <span className="centre-verified">
+                <CheckCircle2 size={14} />Verified facility
+              </span>
+            ) : (
+              <span className="pill pending">
+                Verification: {status(selectedCentre.effective_status || 'pending')}
+              </span>
+            )}
+          </div>
+        </header>
+        <div className="centre-details-layout">
+          <CentreGallery key={selectedCentre.id} photos={centrePhotos(selectedCentre)} name={selectedCentre.name} />
+          <section className="panel centre-details-info">
+            <h3>About this cooling centre</h3>
+            <div className="centre-detail-grid">
+              <DetailRow icon={MapPin} label="Address">{selectedCentre.address}</DetailRow>
+              <DetailRow icon={Clock3} label="Operating hours">{selectedCentre.operating_hours}</DetailRow>
+              <DetailRow icon={Phone} label="Contact">{selectedCentre.contact}</DetailRow>
+              <DetailRow icon={Users} label="Capacity">{selectedCentre.capacity ?? 'Not provided'}</DetailRow>
+              <DetailRow icon={MapPin} label="Coordinates">{`${selectedCentre.latitude}, ${selectedCentre.longitude}`}</DetailRow>
+              {isAdmin && (
+                <>
+                  <DetailRow icon={CheckCircle2} label="Last inspection">{selectedCentre.last_inspection_date}</DetailRow>
+                  <DetailRow icon={Clock3} label="Next inspection due">{selectedCentre.next_inspection_date}</DetailRow>
+                </>
+              )}
+              <DetailRow icon={Wrench} label="Facilities">{selectedCentre.facilities?.join(', ')}</DetailRow>
+            </div>
+            <div className="centre-detail-description">
+              <small>Description</small>
+              <p>{selectedCentre.description || 'No description provided.'}</p>
+            </div>
+          </section>
+        </div>
+        <CentreLocationMap centre={selectedCentre} />
+      </section>
+    );
   }
 
   return (
@@ -235,24 +448,52 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
           <Search size={16} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search centre or address…" />
         </div>
-        {isAdmin && <button type="button" className="btn primary" onClick={() => editCentre(null)}><Plus size={16} /> Add centre</button>}
-        {isAdmin && <button type="button" className="btn secondary" onClick={() => setPage('verification')}><BadgeCheck size={16} /> Verification{attention > 0 && <span className="btn-badge">{attention}</span>}</button>}
+
+        {/* Locate me trigger utilizing the parent locate context helper */}
+        <button
+          type="button"
+          className={`btn ${userCoords ? 'primary' : 'secondary'}`}
+          onClick={() => locate && locate()}
+        >
+          <LocateFixed size={16} />
+          {userCoords ? 'Sorted by nearest' : 'Locate me'}
+        </button>
+
+        {isAdmin && (
+          <button type="button" className="btn primary" onClick={() => editCentre(null)}>
+            <Plus size={16} /> Add centre
+          </button>
+        )}
+        {isAdmin && (
+          <button type="button" className="btn secondary" onClick={() => setPage('verification')}>
+            <BadgeCheck size={16} /> Verification
+            {attention > 0 && <span className="btn-badge">{attention}</span>}
+          </button>
+        )}
         <small>{filteredCentres.length} locations</small>
       </div>
-
 
       <div className="centre-tiles">
         {filteredCentres.map(centre => (
           <CentreTile
             key={centre.id}
             centre={centre}
+            distance={centre.distance}
             onOpen={openCentre}
           />
         ))}
       </div>
 
-      {!filteredCentres.length && <Empty title="No cooling centres listed" text={isAdmin ? 'Only verified centres appear here. Manage pending, rejected or expired centres in Verification.' : 'No verified cooling-centre locations have been published. Check official local guidance for current assistance.'} />}
-
+      {!filteredCentres.length && (
+        <Empty
+          title="No cooling centres listed"
+          text={
+            isAdmin
+              ? 'Only verified centres appear here. Manage pending, rejected or expired centres in Verification.'
+              : 'No verified cooling-centre locations have been published. Check official local guidance for current assistance.'
+          }
+        />
+      )}
     </>
   );
 }
