@@ -1,14 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import { ClipboardList, Clock3, XCircle, Download, Printer, ThermometerSun, Gauge, TrendingUp, Activity, CheckCircle2 } from 'lucide-react';
 import { api, dt } from '../../lib/api.js';
 
 const RISK_COLORS = { Low: '#35a57a', Moderate: '#e5a13a', High: '#dc5a4f' };
-// A map is only drawn once readings really cover several places (see the caveat shown with the map).
-const MIN_READINGS_PER_LOCATION = 2;
-const MIN_LOCATIONS_FOR_MAP = 3;
-
 const num = (v, unit = '') => (v == null ? '—' : v + unit);
 const shortDay = value => new Date(value + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const hourLabel = h => `${String(h).padStart(2, '0')}:00`;
@@ -83,9 +78,6 @@ function AdvancedAnalytics({ ctx }) {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [days]);
-
-  const usableLocations = useMemo(() => (data?.locations || []).filter(l => l.readings >= MIN_READINGS_PER_LOCATION), [data]);
-  const mapReady = usableLocations.length >= MIN_LOCATIONS_FOR_MAP;
 
   const toolbar = (
     <div className="toolbar no-print">
@@ -184,34 +176,9 @@ function AdvancedAnalytics({ ctx }) {
             </tbody>
           </table>
         </div>
-        <p className="muted" style={{ marginTop: 10 }}>Red ▲ means conditions worsened; green ▼ means they improved. Compare the number of readings before drawing conclusions — fewer readings make averages less reliable.</p>
       </Panel>
 
-      <Panel title="Sampled-location heat map" sub="Where heat-risk readings were actually recorded">
-        {mapReady ? (
-          <>
-            <div className="analyticsmap">
-              <MapContainer key={`${days}-${usableLocations.length}`} bounds={usableLocations.map(l => [l.lat, l.lon])} boundsOptions={{ padding: [40, 40] }} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
-                <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                {usableLocations.map(l => (
-                  <CircleMarker key={`${l.lat},${l.lon}`} center={[l.lat, l.lon]} radius={Math.min(22, 8 + Math.sqrt(l.readings) * 2)} pathOptions={{ color: RISK_COLORS[l.risk_level], fillColor: RISK_COLORS[l.risk_level], fillOpacity: 0.55, weight: 2 }}>
-                    <Popup><b>{l.risk_level} risk (average)</b><br />Average heat index {l.avg_hi}°C<br />Maximum {l.max_hi}°C<br />{l.readings} readings · {l.high} high-risk<br /><small>~1 km area near {l.lat}, {l.lon}</small></Popup>
-                  </CircleMarker>
-                ))}
-              </MapContainer>
-            </div>
-            <div className="maplegend">
-              {Object.entries(RISK_COLORS).map(([k, v]) => <span key={k}><i style={{ background: v }} />{k} (average of readings)</span>)}
-              <span>Circle size = number of readings</span>
-            </div>
-          </>
-        ) : (
-          <Empty title="Not enough location coverage yet" text={`A map needs readings from at least ${MIN_LOCATIONS_FOR_MAP} different places (each with ${MIN_READINGS_PER_LOCATION}+ readings). This period has ${usableLocations.length} qualifying location${usableLocations.length === 1 ? '' : 's'}. City-level readings cannot show differences between neighbourhoods.`} />
-        )}
-        <p className="caveat">
-          <b>How to read this:</b> each circle summarises only the readings recorded in that ~1 km area. Areas without a circle have <b>no data</b>. This is not an estimate for every neighbourhood, and a single city-level reading must not be read as representing all of Kuala Lumpur.
-        </p>
-      </Panel>
+
 
       <Panel title="Community reports in this period" sub={`Submitted in the last ${data.days} days`}>
         <div className="metrics" style={{ margin: 0 }}>

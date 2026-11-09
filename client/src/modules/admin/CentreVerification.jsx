@@ -5,7 +5,23 @@ import { api, asset, day, dt, status } from '../../lib/api.js';
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in the browser's local time
 const addDays = (ymd, n) => { const d = new Date(ymd + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA'); };
 const DEFAULT_INTERVAL_DAYS = 90;
-const freshForm = () => ({ outcome: 'verified', inspectedAt: today(), nextInspectionDate: addDays(today(), DEFAULT_INTERVAL_DAYS), remarks: '' });
+const freshForm = (centre = null) => {
+  const currentOutcome = centre?.effective_status ?? centre?.verification_status;
+  const outcome = ['verified', 'pending', 'rejected'].includes(currentOutcome)
+    ? currentOutcome
+    : 'pending';
+  const inspectedAt = today();
+  const scheduled = centre?.next_inspection_date;
+  const nextInspectionDate = outcome === 'rejected'
+    ? ''
+    : scheduled && scheduled > inspectedAt
+      ? scheduled
+      : outcome === 'verified'
+        ? addDays(inspectedAt, DEFAULT_INTERVAL_DAYS)
+        : '';
+
+  return { outcome, inspectedAt, nextInspectionDate, remarks: '' };
+};
 
 function DueLabel({ centre }) {
   if (!centre.next_inspection_date) return <span className="due">Not scheduled</span>;
@@ -49,7 +65,7 @@ export default function CentreVerification({ ctx }) {
   function openCentre(centre) {
     setSelected(centre);
     setHistory(null);
-    setForm(freshForm());
+    setForm(freshForm(centre));
     setEvidence(null);
     loadHistory(centre.id);
   }
@@ -76,9 +92,17 @@ export default function CentreVerification({ ctx }) {
     if (evidence) body.append('evidence', evidence);
     setSaving(true);
     try {
-      await api(`/admin/centres/${selected.id}/inspections`, { method: 'POST', body });
+      const result = await api(`/admin/centres/${selected.id}/inspections`, { method: 'POST', body });
       setSuccess(`Inspection recorded for ${selected.name}.`);
-      setForm(freshForm());
+      const updated = { ...selected, ...result.centre };
+      setSelected(updated);
+      setData(previous => ({
+        ...previous,
+        centres: previous.centres.map(centre =>
+          String(centre.id) === String(updated.id) ? { ...centre, ...updated } : centre
+        ),
+      }));
+      setForm(freshForm(updated));
       setEvidence(null);
       await Promise.all([load(), loadHistory(selected.id), refresh()]);
     } catch (error) {

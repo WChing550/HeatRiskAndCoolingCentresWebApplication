@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Search, Plus, LocateFixed, ArrowLeft, MapPin, Clock3, Phone, Users, Wrench, CheckCircle2, BadgeCheck } from 'lucide-react';
 import CentreAddressVerifier from '../../components/CentreAddressVerifier.jsx';
 import CentreLocationMap from '../../components/CentreLocationMap.jsx';
@@ -13,6 +13,65 @@ const EMPTY_CENTRE = { name: '', address: '', latitude: '3.1390', longitude: '10
 
 function DetailRow({ icon: Icon, label, children }) {
   return <div className="centre-detail-row"><span className="centre-detail-icon"><Icon size={16} /></span><div><small>{label}</small><div>{children || 'Not provided'}</div></div></div>;
+}
+
+function CentreTile({ centre, isAdmin, onOpen }) {
+  const tile = useRef(null);
+  const address = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!isAdmin || !tile.current || !address.current) return;
+
+    // Reveal exactly the address row height without reserving blank space.
+    const measure = () => {
+      if (!tile.current || !address.current) return;
+      const height = Math.ceil(address.current.getBoundingClientRect().height);
+      tile.current.style.setProperty('--centre-address-height', `${height}px`);
+    };
+
+    measure();
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(measure);
+    observer?.observe(address.current);
+    window.addEventListener('resize', measure);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [isAdmin, centre.address]);
+
+  const cover = centrePhotos(centre)[0];
+
+  return (
+    <button
+      ref={tile}
+      type="button"
+      className={'centre-tile' + (isAdmin ? ' centre-tile--reveal' : '')}
+      onClick={() => onOpen(centre)}
+      aria-label={isAdmin ? `${centre.name}. Address: ${centre.address}` : centre.name}
+    >
+      <div className="centre-tile-photo">
+        {cover
+          ? <img src={asset(cover)} alt="" loading="lazy" />
+          : <Building2 size={40} />}
+      </div>
+      {isAdmin ? (
+        <div className="centre-tile-caption">
+          <h3>{centre.name}</h3>
+          <div ref={address} className="centre-tile-address">
+            <span className="centre-tile-location-icon" aria-hidden="true">
+              <MapPin size={18} />
+            </span>
+            <div className="centre-tile-address-copy">
+              <p>{centre.address}</p>
+            </div>
+          </div>
+        </div>
+      ) : <h3>{centre.name}</h3>}
+    </button>
+  );
 }
 
 export default function CoolingCentres({ page, userCoords, locate, weatherError, isAdmin, attention = 0, centres = [], loaded = true, refresh, setError, setSuccess, setPage }) {
@@ -184,7 +243,16 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
       </div>
 
 
-      <div className="centre-tiles">{filteredCentres.map(centre=><button type="button" className="centre-tile" key={centre.id} onClick={()=>openCentre(centre)}><div className="centre-tile-photo">{centrePhotos(centre)[0]?<img src={asset(centrePhotos(centre)[0])} alt="" loading="lazy"/>:<Building2 size={40}/>}</div><h3>{centre.name}</h3></button>)}</div>
+      <div className="centre-tiles">
+        {filteredCentres.map(centre => (
+          <CentreTile
+            key={centre.id}
+            centre={centre}
+            isAdmin={isAdmin}
+            onOpen={openCentre}
+          />
+        ))}
+      </div>
 
       {!filteredCentres.length && <Empty title="No cooling centres listed" text={isAdmin ? 'Only verified centres appear here. Manage pending, rejected or expired centres in Verification.' : 'No verified cooling-centre locations have been published. Check official local guidance for current assistance.'} />}
 

@@ -13,7 +13,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { pool } from './db.js';
-import { heatIndexC, riskLevel, riskAdvice } from './heat.js';
+import { calculateHeatIndex, riskLevel, riskAdvice } from './heat.js';
 import { registerCentrePhotoRoutes } from './centrePhotos.js';
 import { registerCentreLocationRoutes } from './centreLocation.js';
 import {
@@ -411,14 +411,16 @@ async function weather(lat, lon) {
     throw Object.assign(new Error(data.message || 'Weather service failed.'), { status: 502 });
   }
 
-  const temperature = Number(data.main?.temp);
-  const humidity = Number(data.main?.humidity);
-
-  if (!Number.isFinite(temperature) || !Number.isFinite(humidity)) {
-    throw Object.assign(new Error('Weather data incomplete.'), { status: 502 });
+  let calculation;
+  try {
+    calculation = calculateHeatIndex(data.main?.temp, data.main?.humidity);
+  } catch (error) {
+    throw Object.assign(new Error('Weather data invalid: ' + error.message), { status: 502 });
   }
 
-  const heatIndex = heatIndexC(temperature, humidity);
+  const temperature = calculation.temperature_c;
+  const humidity = calculation.relative_humidity;
+  const heatIndex = calculation.heat_index_c;
   const level = riskLevel(heatIndex);
 
   const reading = {
@@ -428,6 +430,7 @@ async function weather(lat, lon) {
     temperature_c: temperature,
     humidity,
     heat_index_c: heatIndex,
+    heat_index_calculation: calculation,
     risk_level: level,
     weather_description: data.weather?.[0]?.description || '',
     observed_at: new Date((data.dt || Date.now() / 1000) * 1000).toISOString(),

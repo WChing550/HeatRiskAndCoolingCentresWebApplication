@@ -932,3 +932,358 @@
 .admin-shell .search:focus-within {
     border-color: #536e86;
 }
+
+
+/* Reveal the admin address inside the existing card without resizing it. */
+.admin-shell .centre-tile--reveal {
+    --centre-address-height: 72px;
+    display: block;
+    align-self: start;
+}
+
+.admin-shell .centre-tile--reveal,
+.admin-shell .centre-tile--reveal:hover,
+.admin-shell .centre-tile--reveal:focus-visible {
+    transform: none;
+    box-shadow: 4px 4px 0 #8797a2;
+}
+
+.admin-shell .centre-tile--reveal .centre-tile-photo {
+    position: relative;
+    z-index: 0;
+    transition: transform 460ms cubic-bezier(.22, .61, .36, 1);
+}
+
+.admin-shell .centre-tile--reveal img,
+.admin-shell .centre-tile--reveal:hover img,
+.admin-shell .centre-tile--reveal:focus-visible img {
+    transform: none;
+    transition: none;
+}
+
+.admin-shell .centre-tile--reveal .centre-tile-caption {
+    position: relative;
+    z-index: 1;
+    height: auto;
+    background: #fffefa;
+    border-top: 1px solid #b7c5cf;
+    transition: transform 460ms cubic-bezier(.22, .61, .36, 1);
+}
+
+.admin-shell .centre-tile--reveal h3 {
+    box-sizing: border-box;
+    height: auto;
+    margin: 0;
+    padding: 10px 12px 8px;
+    border-top: 0;
+    font-size: 16px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+
+.admin-shell .centre-tile--reveal .centre-tile-address {
+    box-sizing: border-box;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 0 12px 10px;
+    background: inherit;
+    color: #6d8190;
+    font-size: 12px;
+    line-height: 1.65;
+    text-align: left;
+    overflow-wrap: anywhere;
+    display: flex;
+    overflow: visible;
+    opacity: 0;
+    transition: opacity 180ms ease;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+}
+
+.admin-shell .centre-tile--reveal:focus-visible .centre-tile-photo,
+.admin-shell .centre-tile--reveal:focus-visible .centre-tile-caption {
+    transform: translateY(calc(-1 * var(--centre-address-height)));
+}
+
+.admin-shell .centre-tile--reveal:focus-visible .centre-tile-address {
+    opacity: 1;
+}
+
+.admin-shell .centre-tile--reveal:hover .centre-tile-photo,
+    .admin-shell .centre-tile--reveal:hover .centre-tile-caption {
+    transform: translateY(calc(-1 * var(--centre-address-height)));
+}
+
+.admin-shell .centre-tile--reveal:hover .centre-tile-address {
+    opacity: 1;
+    transition-delay: 80ms;
+}
+
+.motion-paused .admin-shell .centre-tile--reveal .centre-tile-photo,
+.motion-paused .admin-shell .centre-tile--reveal .centre-tile-caption,
+.motion-paused .admin-shell .centre-tile--reveal .centre-tile-address {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-shell .centre-tile--reveal .centre-tile-photo,
+    .admin-shell .centre-tile--reveal .centre-tile-caption,
+    .admin-shell .centre-tile--reveal .centre-tile-address {
+        transition: none;
+    }
+}
+
+/* Card hover responds directly to :hover, including mouse input on touch-capable devices. */
+
+
+/* Compact address details; the reveal distance is measured from this row. */
+.admin-shell .centre-tile-location-icon {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #b3c2cd;
+    border-radius: 7px;
+    background: #e5edf1;
+    color: #7896a7;
+    flex: 0 0 28px;
+}
+
+.admin-shell .centre-tile-location-icon svg {
+    display: block;
+}
+
+.admin-shell .centre-tile-address-copy {
+    min-width: 0;
+    flex: 1 1 0;
+}
+
+.admin-shell .centre-tile-address-copy p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+/* Keep all dialog X controls square and center their icons exactly. */
+.modal .modalhead .iconbtn,
+.modal button[aria-label="Close"],
+[role="dialog"] button[aria-label="Close"] {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    flex: 0 0 36px;
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    margin: 0;
+    padding: 0;
+    gap: 0;
+    line-height: 0;
+    text-align: center;
+    text-indent: 0;
+}
+
+.modal .modalhead .iconbtn > svg,
+.modal button[aria-label="Close"] > svg,
+[role="dialog"] button[aria-label="Close"] > svg {
+    display: block;
+    position: static;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    transform: none;
+}
+
+
+/* Four larger admin cards per desktop row; keep smaller screens readable. */
+.admin-shell .centre-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+@media (max-width: 1199px) {
+    .admin-shell .centre-tiles {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 959px) {
+    .admin-shell .centre-tiles {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 699px) {
+    .admin-shell .centre-tiles {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+}
+
+@media (max-width: 439px) {
+    .admin-shell .centre-tiles {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+
+/* Give the four desktop cards more room without changing other admin pages. */
+@media (min-width: 1200px) {
+    .admin-shell .content:has(.centre-tiles) {
+        max-width: 1680px;
+        padding-inline: 28px;
+    }
+
+    .admin-shell .centre-tiles {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+}
+
+
+/* Explain the current heat-index reading using the API's calculation trace. */
+.heat-calculation {
+    margin-top: 26px;
+    min-width: 0;
+}
+
+.heat-calculation > .panelhead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.heat-calculation h3 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.heat-method {
+    display: inline-flex;
+    padding: 8px 12px;
+    border: 1px solid #b9cbd6;
+    border-radius: 20px;
+    background: #eaf0f5;
+    color: #526e83;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.heat-calculation-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0 0 22px;
+    padding: 0;
+    list-style: none;
+}
+
+.heat-calculation-steps li {
+    min-width: 0;
+    padding: 17px;
+    background: #edf2f7;
+    border: 1px solid #cbd8e2;
+    border-radius: 12px;
+}
+
+.heat-calculation-steps li:nth-child(2) { background: #edf4ef; }
+.heat-calculation-steps li:nth-child(3) { background: #f1eef7; }
+.heat-calculation-steps li:nth-child(4) { background: #fff4e5; }
+
+.heat-calculation-steps small {
+    display: block;
+    margin-bottom: 12px;
+    font-size: 10px;
+    letter-spacing: .04em;
+    color: #6b8190;
+}
+
+.heat-calculation-steps strong {
+    display: block;
+    margin-bottom: 9px;
+    font-size: 18px;
+    line-height: 1.4;
+    color: #405d72;
+}
+
+.heat-calculation-steps li:last-child strong { font-size: 26px; }
+
+.heat-calculation-steps p,
+.heat-formula-block p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.75;
+    color: #5d7485;
+}
+
+.heat-formula-block { min-width: 0; }
+
+.heat-formula-block h4 {
+    margin: 18px 0 7px;
+    font-size: 14px;
+    color: #405d72;
+}
+
+.heat-formula-block pre {
+    max-width: 100%;
+    margin: 13px 0;
+    padding: 16px;
+    overflow-x: auto;
+    border: 1px solid #c5d4df;
+    border-radius: 10px;
+    background: #edf2f6;
+    color: #38586f;
+    font: 12px/1.9 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.heat-formula-details { margin-top: 18px; }
+
+.heat-formula-details summary {
+    padding: 13px 0;
+    cursor: pointer;
+    color: #526e83;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.heat-formula-details summary:focus-visible {
+    outline: 2px solid #6f8da3;
+    outline-offset: 3px;
+}
+
+.heat-calculation .heat-calculation-note {
+    margin: 12px 0 0;
+    font-size: 11px;
+    line-height: 1.8;
+    color: #6b8190;
+}
+
+.heat-calculation-note a { color: #526e83; }
+
+@media (max-width: 1100px) {
+    .heat-calculation-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 600px) {
+    .heat-calculation-steps { grid-template-columns: minmax(0, 1fr); }
+    .heat-formula-block pre { font-size: 11px; padding: 12px; }
+}
