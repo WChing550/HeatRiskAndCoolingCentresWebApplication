@@ -11,6 +11,24 @@
     background: var(--paper)
 }
 
+:root {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --text: #263a4e;
+  --muted: #627d98;
+  --line: #e6ecf1;
+}
+[data-theme="dark"] {
+  color-scheme: dark;       /* dark scrollbars, date pickers, etc. */
+  --bg: #0f1720;
+  --surface: #16212e;
+  --text: #e4ebf2;
+  --muted: #9fb3c8;
+  --line: #26364a;
+}
+body { background: var(--bg); color: var(--text); }
+
+
 html {
     scroll-behavior: smooth;
     scroll-padding-top: 100px

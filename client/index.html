@@ -8,6 +8,17 @@
     <meta name="description"
         content="Move through Kuala Lumpur with more confidence. Explore local heat insights, verified cooling spaces and community reports with HeatSafe KL." />
     <title>HeatSafe KL</title>
+
+    <script>
+  (function () {
+    try {
+      var t = localStorage.getItem('theme') ||
+        (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+
 </head>
 
 <body>

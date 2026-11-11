@@ -3,6 +3,7 @@ import { Sun, ArrowUpRight, Eye, EyeOff } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import ClimateArt from '../../components/ClimateArt.jsx';
 import { Field } from '../../components/Shared.jsx';
+import ThemeToggle from '../../components/ThemeToggle.jsx';
 
 const COPY = {
   login: { title: 'Welcome back', sub: 'Sign in to access heat insights and your reports.', button: 'Sign in' },
@@ -269,10 +270,16 @@ function Auth({ home, mode, setMode, done, guest }) {
       </section>
 
       <section className="auth-form">
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <ThemeToggle />
+        </div>
+
+        <div className="auth-brand"></div>
         <div className="auth-brand">
           <span className="auth-brand-icon">
             <Sun size={22} />
           </span>
+
           <span>
             HEATSAFE <b>KL</b>
           </span>

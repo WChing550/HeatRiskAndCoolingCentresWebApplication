@@ -21,6 +21,7 @@ import CentreVerification from './modules/admin/CentreVerification.jsx';
 import AlertManagement from './modules/admin/AlertManagement.jsx';
 import ActivityLog from './modules/admin/ActivityLog.jsx';
 import AlertBanner from './components/AlertBanner.jsx';
+import ThemeToggle from './components/ThemeToggle.jsx';
 
 const btn = (label, fn, kind = 'primary', icon = null) => (
   <button className={'btn ' + kind} onClick={fn}>
@@ -259,29 +260,29 @@ function App() {
 
   const nav = module === 'admin'
     ? [
-        ['overview', 'Overview', LayoutDashboard],
-        ['heat', 'Heat Risk', ThermometerSun],
-        ['centres', 'Cooling Centres', Building2],
-        ['reports', 'Report Review', ClipboardList],
-        ['alerts', 'Heat Alerts', BellRing],
-        ['users', 'User Management', Users],
-        ['trends', 'Analytics', Activity],
-        ['activity', 'Activity Log', ScrollText],
-        ['profile', 'My Profile', UserRound],
-      ]
+      ['overview', 'Overview', LayoutDashboard],
+      ['heat', 'Heat Risk', ThermometerSun],
+      ['centres', 'Cooling Centres', Building2],
+      ['reports', 'Report Review', ClipboardList],
+      ['alerts', 'Heat Alerts', BellRing],
+      ['users', 'User Management', Users],
+      ['trends', 'Analytics', Activity],
+      ['activity', 'Activity Log', ScrollText],
+      ['profile', 'My Profile', UserRound],
+    ]
     : [
-        ['overview', 'Overview', LayoutDashboard],
-        ['heat', 'Heat risk', ThermometerSun],
-        ['centres', 'Cooling centres', MapPin],
-        ...(user
-          ? [
-              ['myreports', 'My reports', ClipboardList],
-              ['submit', 'Submit report', Plus],
-              ['profile', 'My profile', UserRound],
-            ]
-          : []),
-        ['trends', 'Heat trends', Activity],
-      ],
+      ['overview', 'Overview', LayoutDashboard],
+      ['heat', 'Heat risk', ThermometerSun],
+      ['centres', 'Cooling centres', MapPin],
+      ...(user
+        ? [
+          ['myreports', 'My reports', ClipboardList],
+          ['submit', 'Submit report', Plus],
+          ['profile', 'My profile', UserRound],
+        ]
+        : []),
+      ['trends', 'Heat trends', Activity],
+    ],
     title = nav.find(x => x[0] === page)?.[1] || (
       page === 'verification' ? 'Centre Verification' : 'Cooling centre form'
     );
@@ -423,30 +424,37 @@ function App() {
                                 ? 'A traceable record of administrator actions.'
                                 : page === 'trends'
                                   ? (isAdmin
-                                      ? 'Analyse heat readings over time, compare periods and export reports.'
-                                      : 'Understand recent heat patterns and reporting activity.')
+                                    ? 'Analyse heat readings over time, compare periods and export reports.'
+                                    : 'Understand recent heat patterns and reporting activity.')
                                   : page === 'profile'
                                     ? 'Manage account details and security.'
                                     : 'Manage reports and facility details.'}
               </p>
             </div>
 
-            {isAdmin && page !== 'heat' && (
-              <button
-                className="btn secondary weather-refresh"
-                disabled={weatherLoading}
-                onClick={refreshWeather}
-              >
-                <RefreshCw
-                  size={15}
-                  className={weatherLoading ? 'spin' : ''}
-                />
-                {weatherLoading
-                  ? 'Refreshing Kuala Lumpur weather…'
-                  : 'Refresh Kuala Lumpur weather'}
-              </button>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <ThemeToggle />
+
+              {isAdmin && page !== 'heat' && (
+                <button
+                  className="btn secondary weather-refresh"
+                  disabled={weatherLoading}
+                  onClick={refreshWeather}
+                >
+                  <RefreshCw
+                    size={15}
+                    className={weatherLoading ? 'spin' : ''}
+                  />
+                  {weatherLoading
+                    ? 'Refreshing Kuala Lumpur weather…'
+                    : 'Refresh Kuala Lumpur weather'}
+                </button>
+              )}
+            </div>
+
           </div>
+
+
 
           {error && (
             <div className="notice">
