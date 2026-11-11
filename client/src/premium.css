@@ -65,6 +65,14 @@ a:focus-visible {
     letter-spacing: -5px
 }
 
+
+/* Show/hide password (eye) button */
+.pw-wrap{position:relative;display:block;width:100%}
+.pw-wrap input{width:100%;padding-right:46px}
+.pw-toggle{position:absolute;top:50%;right:8px;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.6;cursor:pointer}
+.pw-toggle:hover{opacity:1;background:rgba(0,0,0,.06)}
+.pw-toggle:focus-visible{opacity:1;outline:2px solid currentColor;outline-offset:1px}
+
 .cool-word {
     color: #b65b32;
     font-style: italic

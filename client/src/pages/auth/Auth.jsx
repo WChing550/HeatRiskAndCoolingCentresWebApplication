@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sun, ArrowUpRight } from 'lucide-react';
+import { Sun, ArrowUpRight, Eye, EyeOff } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import ClimateArt from '../../components/ClimateArt.jsx';
 import { Field } from '../../components/Shared.jsx';
@@ -14,6 +14,29 @@ const COPY = {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+// Password input with a show/hide (eye) button. Each field keeps its own visibility state.
+function PasswordInput({ error, ...inputProps }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <>
+      <div className="pw-wrap">
+        <input {...inputProps} type={visible ? 'text' : 'password'} />
+        <button
+          type="button"
+          className="pw-toggle"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? 'Hide password' : 'Show password'}
+          aria-pressed={visible}
+          title={visible ? 'Hide password' : 'Show password'}
+        >
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+      {error && <span className="field-error">{error}</span>}
+    </>
+  );
+}
 
 function Auth({ home, mode, setMode, done, guest }) {
   const [form, setForm] = useState({
@@ -329,29 +352,23 @@ function Auth({ home, mode, setMode, done, guest }) {
 
           {!isForgot && (
             <Field label={isReset ? 'New password' : 'Password'}>
-              <input
-                type="password"
+              <PasswordInput
                 name="password"
                 value={form.password}
                 onChange={handleChange}
+                error={fieldErrors.password}
               />
-              {fieldErrors.password && (
-                <span className="field-error">{fieldErrors.password}</span>
-              )}
             </Field>
           )}
 
           {(isRegister || isReset) && (
             <Field label="Confirm password">
-              <input
-                type="password"
+              <PasswordInput
                 name="confirmPassword"
                 value={form.confirmPassword}
                 onChange={handleChange}
+                error={fieldErrors.confirmPassword}
               />
-              {fieldErrors.confirmPassword && (
-                <span className="field-error">{fieldErrors.confirmPassword}</span>
-              )}
             </Field>
           )}
 
