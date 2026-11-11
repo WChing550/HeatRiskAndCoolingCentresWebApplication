@@ -79,8 +79,17 @@ CREATE INDEX IF NOT EXISTS idx_activity_module ON admin_activity_logs(module,cre
 -- 5. Analytics: speed up location grouping for the sampled-location map
 CREATE INDEX IF NOT EXISTS idx_heat_coords ON heat_risk_logs(latitude,longitude);
 
--- Multiple centre photos
--- Additive and safe to re-run. Existing single-photo covers are retained.
-ALTER TABLE cooling_centres ADD COLUMN IF NOT EXISTS image_urls TEXT[] NOT NULL DEFAULT '{}';
-UPDATE cooling_centres SET image_urls=ARRAY[image_url]
-WHERE image_url IS NOT NULL AND cardinality(image_urls)=0;
+-- 6. Email verification & password reset
+-- Existing users are marked verified once (DEFAULT TRUE fills old rows), then new users default to FALSE.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ALTER COLUMN email_verified SET DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS email_tokens(
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose VARCHAR(20) NOT NULL CHECK(purpose IN('verify','reset')),
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id,purpose);

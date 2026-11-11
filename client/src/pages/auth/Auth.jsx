@@ -30,6 +30,8 @@ function Auth({ home, mode, setMode, done, guest }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
+  // When set, a "Resend verification email" button is shown (value = email or username to resend to)
+  const [resendLogin, setResendLogin] = useState('');
   const [resetToken, setResetToken] = useState(
     () => new URLSearchParams(window.location.search).get('token') || ''
   );
@@ -43,6 +45,25 @@ function Auth({ home, mode, setMode, done, guest }) {
   useEffect(() => {
     if (resetToken) setMode('reset');
   }, [resetToken]);
+
+  // Opened from the link in the verification email: /?verify=TOKEN
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('verify');
+    if (!token) return;
+    // remove the token from the address bar straight away (also prevents a double call in React StrictMode)
+    window.history.replaceState({}, '', window.location.pathname);
+    setBusy(true);
+    api('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) })
+      .then((data) => {
+        setMode('login');
+        setSuccess(data.message || 'Email verified. You can now sign in.');
+      })
+      .catch((err) => {
+        setMode('login');
+        setError(err.message);
+      })
+      .finally(() => setBusy(false));
+  }, []);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -58,6 +79,7 @@ function Auth({ home, mode, setMode, done, guest }) {
     setError('');
     setSuccess('');
     setFieldErrors({});
+    setResendLogin('');
   }
 
   // Perform per-field validation
@@ -108,8 +130,9 @@ function Auth({ home, mode, setMode, done, guest }) {
       }
     }
 
-    if (isForgot && !form.email.trim()) {
-      errors.email = 'Please enter your email.';
+    if (isForgot) {
+      if (!form.email.trim()) errors.email = 'Please enter your email.';
+      else if (!EMAIL_REGEX.test(form.email.trim())) errors.email = 'Please enter a valid email address.';
     }
 
     if (isLogin) {
@@ -125,6 +148,7 @@ function Auth({ home, mode, setMode, done, guest }) {
     event.preventDefault();
     setError('');
     setSuccess('');
+    setResendLogin('');
 
     if (!validateForm()) return;
 
@@ -139,15 +163,18 @@ function Auth({ home, mode, setMode, done, guest }) {
           password: form.password,
         };
 
-        await api('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+        const data = await api('/auth/register', { method: 'POST', body: JSON.stringify(payload) });
         setMode('login');
-        setSuccess('Account created successfully. Please sign in.');
+        setForm((prev) => ({ ...prev, login: payload.email, password: '', confirmPassword: '' }));
+        // The server tells us whether the verification email went out
+        setSuccess(data.message || 'Account created. Please check your email to verify your account.');
+        if (data.emailSent === false) setResendLogin(payload.email);
       } else if (isForgot) {
-        await api('/auth/forgot-password', {
+        const data = await api('/auth/forgot-password', {
           method: 'POST',
           body: JSON.stringify({ email: form.email.trim().toLowerCase() }),
         });
-        setSuccess('If that email is registered, a reset link has been sent. Please check your inbox.');
+        setSuccess(data.message || 'If that email is registered, a reset link has been sent. Please check your inbox.');
       } else if (isReset) {
         await api('/auth/reset-password', {
           method: 'POST',
@@ -165,6 +192,26 @@ function Auth({ home, mode, setMode, done, guest }) {
         });
         done(data.user);
       }
+    } catch (err) {
+      setError(err.message);
+      // Correct password but email not verified yet -> offer to resend the link
+      if (err.code === 'EMAIL_NOT_VERIFIED') setResendLogin(form.login.trim().toLowerCase());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResend() {
+    setBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const data = await api('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ login: resendLogin }),
+      });
+      setSuccess(data.message);
+      setResendLogin('');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -214,6 +261,14 @@ function Auth({ home, mode, setMode, done, guest }) {
 
         {error && <div className="notice" role="alert">{error}</div>}
         {success && <div className="notice success" role="status">{success}</div>}
+
+        {resendLogin && (
+          <p className="switch" style={{ margin: '0 0 12px' }}>
+            <button type="button" onClick={handleResend} disabled={busy}>
+              Resend verification email
+            </button>
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} noValidate>
           {isRegister && (

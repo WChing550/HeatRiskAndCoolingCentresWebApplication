@@ -1,21 +1,20 @@
 import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import session from 'express-session';
-import pgSession from 'connect-pg-simple';
-import bcrypt from 'bcryptjs';
-import multer from 'multer';
-import rateLimit from 'express-rate-limit';
-import nodemailer from 'nodemailer';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+
+import bcrypt from 'bcryptjs';
+import connectPgSimple from 'connect-pg-simple';
+import cors from 'cors';
+import express from 'express';
+import rateLimit from 'express-rate-limit';
+import session from 'express-session';
+import helmet from 'helmet';
+import multer from 'multer';
+
 import { pool } from './db.js';
-import { calculateHeatIndex, riskLevel, riskAdvice } from './heat.js';
-import { registerCentrePhotoRoutes } from './centrePhotos.js';
-import { registerCentreLocationRoutes } from './centreLocation.js';
+import { heatIndexC, riskLevel, riskAdvice } from './heat.js';
 import {
   registerAdminFeatures,
   logActivity,
@@ -24,29 +23,26 @@ import {
   TODAY_KL,
   EXPIRED_SQL,
 } from './adminFeatures.js';
+import { registerEmailAuth, sendVerification, EMAIL_REGEX, PASSWORD_REGEX } from './emailAuth.js';
+import { verifyMailer } from './mailer.js';
 
-/* ------------------------------------------------------------------ */
-/* App setup                                                           */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   App setup
+   ========================================================================== */
 
-const app = express();
 const PORT = process.env.PORT || 4000;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(here, '..', process.env.UPLOAD_DIR || 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
+const app = express();
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(
-  cors({
-    origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
-    credentials: true,
-  })
-);
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(uploadDir, { maxAge: '1d' }));
 
-const PgStore = pgSession(session);
+const PgStore = connectPgSimple(session);
 app.use(
   session({
     store: new PgStore({ pool, tableName: 'user_sessions', createTableIfMissing: true }),
@@ -58,132 +54,99 @@ app.use(
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 43200000, // 12 hours
+      maxAge: 12 * 60 * 60 * 1000, // 12 hours
     },
   })
 );
 
-/* ------------------------------------------------------------------ */
-/* Helpers                                                             */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Helpers and middleware
+   ========================================================================== */
 
-// General rate limit: 30 requests per 15 minutes
-const limiter = rateLimit({
-  windowMs: 900000,
-  limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Rate limit for register / login
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-// Image uploads (JPG, PNG, WebP, max 5 MB, 1 file)
+// File uploads (one image, max 5 MB, jpeg/png/webp only)
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, f, cb) =>
-    cb(
-      null,
-      Date.now() + '-' + crypto.randomBytes(6).toString('hex') + path.extname(f.originalname).toLowerCase()
-    ),
+  filename: (_req, uploaded, cb) =>
+    cb(null, Date.now() + '-' + crypto.randomBytes(6).toString('hex') + path.extname(uploaded.originalname).toLowerCase()),
 });
-
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
-  fileFilter: (_req, f, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(f.mimetype)),
+  fileFilter: (_req, uploaded, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(uploaded.mimetype)),
 });
 
-// Wraps async route handlers so errors reach the error handler
-const ar = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+// Wrap async route handlers so errors reach the error handler at the bottom
+const ar = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
-// Trimmed string, or '' if the value is not a string
 const str = (x) => (typeof x === 'string' ? x.trim() : '');
+const toNum = (x) => (x === '' || x == null ? null : Number(x));
+const file = (req) => (req.file ? '/uploads/' + req.file.filename : null);
+const facilitiesList = (value) => str(value).split(',').map((x) => x.trim()).filter(Boolean);
 
-// Number, or null for empty values
-const n = (x) => (x === '' || x == null ? null : Number(x));
+// Coordinates must fall inside Kuala Lumpur
+const inKL = (lat, lon) => Number(lat) >= 3 && Number(lat) <= 3.3 && Number(lon) >= 101.55 && Number(lon) <= 101.8;
 
-// User fields that are safe to send to the browser
-const userSafe = (u) => ({
-  id: u.id,
-  fullName: u.full_name,
-  email: u.email,
-  username: u.username,
-  role: u.role,
-  avatarUrl: u.avatar_url || null,
-});
+// What the browser is allowed to know about a user
+const userSafe = (u) => ({ id: u.id, fullName: u.full_name, email: u.email, username: u.username, role: u.role });
 
-// Must be signed in
 const auth = (req, res, next) =>
   req.session.user ? next() : res.status(401).json({ error: 'Please sign in first.' });
-
-// Must be an administrator
 const admin = (req, res, next) =>
-  req.session.user?.role === 'admin'
-    ? next()
-    : res.status(403).json({ error: 'Administrator access required.' });
+  req.session.user?.role === 'admin' ? next() : res.status(403).json({ error: 'Administrator access required.' });
 
-// Public path of the uploaded file on this request, or null
-const file = (req) => (req.file ? '/uploads/' + req.file.filename : null);
-
-// Is the coordinate inside Kuala Lumpur?
-const kl = (a, b) =>
-  Number(a) >= 3 && Number(a) <= 3.3 && Number(b) >= 101.55 && Number(b) <= 101.8;
-
-/* ------------------------------------------------------------------ */
-/* Auth                                                                */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Health + authentication
+   ========================================================================== */
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-
 app.get('/api/auth/me', (req, res) => res.json({ user: req.session.user || null }));
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/; // 8+ chars, 1 uppercase, 1 lowercase, 1 number
 
 app.post(
   '/api/auth/register',
   limiter,
   ar(async (req, res) => {
-    const fullName = str(req.body.fullName);
-    const email = str(req.body.email).toLowerCase();
-    const username = str(req.body.username);
-    const password = String(req.body.password || '');
-
-    if (!fullName || !email || !username || !password) {
-      return res.status(400).json({ error: 'All fields are required.' });
-    }
-
-    if (!USERNAME_REGEX.test(username)) {
+    const { fullName, email, username, password } = req.body;
+    const invalid =
+      !str(fullName) ||
+      !str(email) ||
+      !str(username) ||
+      !EMAIL_REGEX.test(str(email)) ||
+      !PASSWORD_REGEX.test(String(password || ''));
+    if (invalid) {
       return res.status(400).json({
-        error: 'Username must be 3–20 characters and contain only letters, numbers, underscores, or hyphens.',
-      });
-    }
-
-    if (!EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ error: 'Please provide a valid email address.' });
-    }
-
-    // Password Complexity Validation
-    if (!PASSWORD_REGEX.test(password)) {
-      return res.status(400).json({
-        error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.',
+        error:
+          'Enter your name, a valid email, a username and a password (8+ characters with an uppercase letter, a lowercase letter and a number).',
       });
     }
 
     try {
-      const passwordHash = await bcrypt.hash(password, 12);
       const result = await pool.query(
-        "INSERT INTO users(full_name, email, username, password_hash, role) VALUES($1, $2, $3, $4, 'user') RETURNING *",
-        [fullName, email, username, passwordHash]
+        "INSERT INTO users(full_name,email,username,password_hash,role) VALUES($1,$2,$3,$4,'user') RETURNING *",
+        [str(fullName), str(email).toLowerCase(), str(username), await bcrypt.hash(password, 12)]
+      );
+      const user = result.rows[0];
+
+      // Send the verification email; a mail failure must not undo the registration
+      const emailSent = await sendVerification(user).then(
+        () => true,
+        (e) => {
+          console.error('[mail] verification email failed:', e.message);
+          return false;
+        }
       );
 
       res.status(201).json({
-        message: 'Account created. Please sign in.',
-        user: userSafe(result.rows[0]),
+        message: emailSent
+          ? `Account created. We sent a verification link to ${user.email}. Please verify your email, then sign in.`
+          : 'Account created, but the verification email could not be sent. Use "Resend verification email" below.',
+        emailSent,
+        user: userSafe(user),
       });
     } catch (e) {
-      if (e.code === '23505') {
-        return res.status(409).json({ error: 'Email or username is already registered.' });
-      }
+      if (e.code === '23505') return res.status(409).json({ error: 'Email or username already exists.' });
       throw e;
     }
   })
@@ -194,34 +157,27 @@ app.post(
   limiter,
   ar(async (req, res) => {
     const login = str(req.body.login).toLowerCase();
-    const result = await pool.query(
-      'SELECT * FROM users WHERE LOWER(email)=$1 OR LOWER(username)=$1 LIMIT 1',
-      [login]
-    );
+    const result = await pool.query('SELECT * FROM users WHERE LOWER(email)=$1 OR LOWER(username)=$1 LIMIT 1', [login]);
+    const user = result.rows[0];
 
-    if (
-      !result.rowCount ||
-      !(await bcrypt.compare(String(req.body.password || ''), result.rows[0].password_hash))
-    ) {
+    if (!user || !(await bcrypt.compare(String(req.body.password || ''), user.password_hash))) {
       return res.status(401).json({ error: 'Invalid username/email or password.' });
     }
-
-    const account = result.rows[0];
-
-    if (account.account_status === 'deactivated') {
-      return res
-        .status(403)
-        .json({ error: 'This account has been deactivated. Please contact an administrator.' });
+    if (user.account_status === 'deactivated') {
+      return res.status(403).json({ error: 'This account has been deactivated. Please contact an administrator.' });
+    }
+    if (!user.email_verified) {
+      return res.status(403).json({
+        error: 'Please verify your email before signing in. Check your inbox for the verification link.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
     }
 
     req.session.regenerate((err) => {
       if (err) return res.status(500).json({ error: 'Session error.' });
-
-      req.session.user = userSafe(account);
+      req.session.user = userSafe(user);
       req.session.save((saveErr) =>
-        saveErr
-          ? res.status(500).json({ error: 'Session save error.' })
-          : res.json({ user: req.session.user })
+        saveErr ? res.status(500).json({ error: 'Session save error.' }) : res.json({ user: req.session.user })
       );
     });
   })
@@ -234,110 +190,9 @@ app.post('/api/auth/logout', (req, res) =>
   })
 );
 
-/* ------------------------------------------------------------------ */
-/* Forgot / reset password (email)                                     */
-/* ------------------------------------------------------------------ */
-
-const mailer = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-});
-
-// Stricter limit: 5 reset requests per 15 minutes
-const resetLimiter = rateLimit({
-  windowMs: 900000,
-  limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.post(
-  '/api/auth/forgot-password',
-  resetLimiter,
-  ar(async (req, res) => {
-    const email = str(req.body.email).toLowerCase();
-    if (!email) return res.status(400).json({ error: 'Enter your email.' });
-
-    const result = await pool.query(
-      'SELECT email,full_name,account_status FROM users WHERE LOWER(email)=$1 LIMIT 1',
-      [email]
-    );
-
-    if (!result.rowCount) {
-      console.log('RESET: no account found for', email);
-    } else if (result.rows[0].account_status === 'deactivated') {
-      console.log('RESET: account is deactivated for', email);
-    } else {
-      const token = crypto.randomBytes(32).toString('hex');
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-      await pool.query('DELETE FROM password_resets WHERE email=$1', [email]);
-      await pool.query(
-        "INSERT INTO password_resets(email,token_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '15 minutes')",
-        [email, tokenHash]
-      );
-
-      const link = `${process.env.CLIENT_ORIGIN || 'http://localhost:5173'}/?token=${token}`;
-      console.log('RESET LINK (for testing):', link);
-
-      try {
-        await mailer.sendMail({
-          from: process.env.MAIL_FROM,
-          to: email,
-          subject: 'Reset your HeatSafe KL password',
-          text: `Use this link to set a new password (valid for 15 minutes):\n${link}`,
-          html: `<p>Use this link to set a new password (valid for 15 minutes):</p><p><a href="${link}">Reset my password</a></p>`,
-        });
-        console.log('RESET: email sent to', email);
-      } catch (e) {
-        console.error('RESET: email failed:', e.message);
-      }
-    }
-
-    // Same answer whether or not the email exists
-    res.json({ message: 'If that email is registered, a reset link has been sent.' });
-  })
-);
-
-app.post(
-  '/api/auth/reset-password',
-  limiter,
-  ar(async (req, res) => {
-    const token = str(req.body.token);
-    const password = String(req.body.password || '');
-
-    if (!token) return res.status(400).json({ error: 'Reset link is invalid.' });
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must have at least 8 characters.' });
-    }
-
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const result = await pool.query(
-      'SELECT id,email FROM password_resets WHERE token_hash=$1 AND used_at IS NULL AND expires_at>NOW()',
-      [tokenHash]
-    );
-
-    if (!result.rowCount) {
-      return res
-        .status(400)
-        .json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
-    }
-
-    await pool.query('UPDATE users SET password_hash=$1,updated_at=NOW() WHERE LOWER(email)=$2', [
-      await bcrypt.hash(password, 12),
-      result.rows[0].email,
-    ]);
-    await pool.query('UPDATE password_resets SET used_at=NOW() WHERE id=$1', [result.rows[0].id]);
-
-    res.json({ message: 'Password updated.' });
-  })
-);
-
-/* ------------------------------------------------------------------ */
-/* Account                                                             */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Account (signed-in user)
+   ========================================================================== */
 
 app.patch(
   '/api/account/profile',
@@ -357,30 +212,6 @@ app.patch(
   })
 );
 
-app.post(
-  '/api/account/avatar',
-  auth,
-  upload.single('avatar'),
-  ar(async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'Choose a JPG, PNG or WebP image.' });
-
-    const old = await pool.query('SELECT avatar_url FROM users WHERE id=$1', [req.session.user.id]);
-    const result = await pool.query(
-      'UPDATE users SET avatar_url=$1,updated_at=NOW() WHERE id=$2 RETURNING *',
-      [file(req), req.session.user.id]
-    );
-
-    // Delete the previous photo so storage does not fill up
-    const previous = old.rows[0]?.avatar_url;
-    if (previous && previous.startsWith('/uploads/')) {
-      fs.promises.unlink(path.join(uploadDir, path.basename(previous))).catch(() => {});
-    }
-
-    req.session.user = userSafe(result.rows[0]);
-    res.json({ user: req.session.user });
-  })
-);
-
 app.patch(
   '/api/account/password',
   auth,
@@ -388,62 +219,45 @@ app.patch(
     if (String(req.body.newPassword || '').length < 8) {
       return res.status(400).json({ error: 'New password must have at least 8 characters.' });
     }
-
-    const result = await pool.query('SELECT password_hash FROM users WHERE id=$1', [
-      req.session.user.id,
-    ]);
-
+    const result = await pool.query('SELECT password_hash FROM users WHERE id=$1', [req.session.user.id]);
     if (!(await bcrypt.compare(String(req.body.currentPassword || ''), result.rows[0].password_hash))) {
       return res.status(400).json({ error: 'Current password is incorrect.' });
     }
-
     await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [
       await bcrypt.hash(req.body.newPassword, 12),
       req.session.user.id,
     ]);
-
     res.json({ message: 'Password updated.' });
   })
 );
 
-/* ------------------------------------------------------------------ */
-/* Weather                                                             */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Weather + heat risk
+   ========================================================================== */
 
 async function weather(lat, lon) {
   if (!process.env.OPENWEATHER_API_KEY) {
-    throw Object.assign(
-      new Error('Live weather unavailable: configure OPENWEATHER_API_KEY in server/.env.'),
-      { status: 503 }
-    );
+    throw Object.assign(new Error('Live weather unavailable: configure OPENWEATHER_API_KEY in server/.env.'), { status: 503 });
   }
 
-  const geo =
+  const location =
     lat != null && lon != null
       ? `lat=${lat}&lon=${lon}`
-      : `q=${encodeURIComponent('Kuala Lumpur,MY')}`;
-
+      : `q=${encodeURIComponent(process.env.WEATHER_DEFAULT_CITY || 'Kuala Lumpur,MY')}`;
   const response = await fetch(
-    `https://api.openweathermap.org/data/2.5/weather?${geo}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric`
+    `https://api.openweathermap.org/data/2.5/weather?${location}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric`
   );
   const data = await response.json();
+  if (!response.ok) throw Object.assign(new Error(data.message || 'Weather service failed.'), { status: 502 });
 
-  if (!response.ok) {
-    throw Object.assign(new Error(data.message || 'Weather service failed.'), { status: 502 });
+  const temperature = Number(data.main?.temp);
+  const humidity = Number(data.main?.humidity);
+  if (!Number.isFinite(temperature) || !Number.isFinite(humidity)) {
+    throw Object.assign(new Error('Weather data incomplete.'), { status: 502 });
   }
 
-  let calculation;
-  try {
-    calculation = calculateHeatIndex(data.main?.temp, data.main?.humidity);
-  } catch (error) {
-    throw Object.assign(new Error('Weather data invalid: ' + error.message), { status: 502 });
-  }
-
-  const temperature = calculation.temperature_c;
-  const humidity = calculation.relative_humidity;
-  const heatIndex = calculation.heat_index_c;
+  const heatIndex = heatIndexC(temperature, humidity);
   const level = riskLevel(heatIndex);
-
   const reading = {
     city: data.name || 'Kuala Lumpur',
     latitude: lat ?? data.coord?.lat,
@@ -451,7 +265,6 @@ async function weather(lat, lon) {
     temperature_c: temperature,
     humidity,
     heat_index_c: heatIndex,
-    heat_index_calculation: calculation,
     risk_level: level,
     weather_description: data.weather?.[0]?.description || '',
     observed_at: new Date((data.dt || Date.now() / 1000) * 1000).toISOString(),
@@ -472,7 +285,6 @@ async function weather(lat, lon) {
       reading.observed_at,
     ]
   );
-
   return reading;
 }
 
@@ -482,18 +294,7 @@ app.get(
     if ((req.query.lat == null) !== (req.query.lon == null)) {
       return res.status(400).json({ error: 'Provide both latitude and longitude.' });
     }
-
-    const lat = n(req.query.lat);
-    const lon = n(req.query.lon);
-
-    if (
-      lat != null &&
-      (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
-    ) {
-      return res.status(400).json({ error: 'Invalid coordinates.' });
-    }
-
-    res.json(await weather(lat, lon));
+    res.json(await weather(toNum(req.query.lat), toNum(req.query.lon)));
   })
 );
 
@@ -503,14 +304,12 @@ app.post(
   admin,
   ar(async (req, res) => {
     const reading = await weather();
-
     await logActivity(req, {
       action: 'Refreshed weather',
       module: 'Heat Monitoring',
       recordType: 'heat_risk_log',
       summary: `Refreshed weather reading: heat index ${reading.heat_index_c}°C (${reading.risk_level} risk)`,
     });
-
     res.json(reading);
   })
 );
@@ -519,50 +318,137 @@ app.get(
   '/api/weather/history',
   ar(async (req, res) => {
     const days = Math.min(90, Math.max(1, Number(req.query.days) || 7));
-
     const result = await pool.query(
-      "SELECT date_trunc('day',observed_at)::date AS day,ROUND(AVG(heat_index_c)::numeric,1)::float AS avg_heat_index,ROUND(MAX(heat_index_c)::numeric,1)::float AS max_heat_index,COUNT(*)::int AS readings FROM heat_risk_logs WHERE observed_at>=NOW()-($1::text||' days')::interval GROUP BY 1 ORDER BY 1",
+      `SELECT date_trunc('day',observed_at)::date AS day,
+              ROUND(AVG(heat_index_c)::numeric,1)::float AS avg_heat_index,
+              ROUND(MAX(heat_index_c)::numeric,1)::float AS max_heat_index,
+              COUNT(*)::int AS readings
+         FROM heat_risk_logs
+        WHERE observed_at>=NOW()-($1::text||' days')::interval
+        GROUP BY 1 ORDER BY 1`,
       [days]
     );
-
     res.json({ rows: result.rows });
   })
 );
 
-/* ------------------------------------------------------------------ */
-/* Cooling centres                                                     */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Cooling centres
+   ========================================================================== */
 
 app.get(
   '/api/centres',
   ar(async (req, res) => {
     const all = req.query.all === 'true' && req.session.user?.role === 'admin';
-
     const result = await pool.query(
       `SELECT c.*,${EXPIRED_SQL} AS expired FROM cooling_centres c ${
         all ? '' : 'WHERE c.verified=TRUE AND NOT ' + EXPIRED_SQL
       } ORDER BY c.name`
     );
-
     res.json(result.rows.map(centreOut));
   })
 );
 
-registerCentrePhotoRoutes(app, {
-  pool,
+app.post(
+  '/api/admin/centres',
   auth,
   admin,
-  ar,
-  str,
-  n,
-  kl,
-  logActivity,
-  centreOut,
-  diffFields,
-  uploadDir,
-});
+  upload.single('image'),
+  ar(async (req, res) => {
+    const b = req.body;
+    if (!str(b.name) || !str(b.address) || !str(b.operatingHours)) {
+      return res.status(400).json({ error: 'Name, address and operating hours are required.' });
+    }
+    if (!inKL(toNum(b.latitude), toNum(b.longitude))) {
+      return res.status(400).json({ error: 'Coordinates must be within Kuala Lumpur (lat 3.00–3.30, lon 101.55–101.80).' });
+    }
 
-registerCentreLocationRoutes(app, { auth, admin, ar });
+    const result = await pool.query(
+      `INSERT INTO cooling_centres(name,address,area,latitude,longitude,operating_hours,contact,description,facilities,capacity,status,image_url,verified)
+       VALUES($1,$2,'Kuala Lumpur',$3,$4,$5,$6,$7,$8,$9,$10,$11,FALSE) RETURNING *`,
+      [
+        str(b.name),
+        str(b.address),
+        toNum(b.latitude),
+        toNum(b.longitude),
+        str(b.operatingHours),
+        str(b.contact) || null,
+        str(b.description) || null,
+        facilitiesList(b.facilities),
+        toNum(b.capacity),
+        b.status || 'open',
+        file(req),
+      ]
+    );
+    await logActivity(req, {
+      action: 'Added cooling centre',
+      module: 'Cooling Centres',
+      recordType: 'cooling_centre',
+      recordId: result.rows[0].id,
+      summary: `Added cooling centre "${result.rows[0].name}" (pending verification)`,
+    });
+    res.status(201).json(centreOut(result.rows[0]));
+  })
+);
+
+app.put(
+  '/api/admin/centres/:id',
+  auth,
+  admin,
+  upload.single('image'),
+  ar(async (req, res) => {
+    const b = req.body;
+    if (!inKL(toNum(b.latitude), toNum(b.longitude))) {
+      return res.status(400).json({ error: 'Coordinates must be within Kuala Lumpur.' });
+    }
+    const before = await pool.query('SELECT * FROM cooling_centres WHERE id=$1', [req.params.id]);
+    if (!before.rowCount) return res.status(404).json({ error: 'Centre not found.' });
+
+    const result = await pool.query(
+      `UPDATE cooling_centres SET name=$1,address=$2,latitude=$3,longitude=$4,operating_hours=$5,contact=$6,
+              description=$7,facilities=$8,capacity=$9,status=$10,image_url=COALESCE($11,image_url),updated_at=NOW()
+        WHERE id=$12 RETURNING *`,
+      [
+        str(b.name),
+        str(b.address),
+        toNum(b.latitude),
+        toNum(b.longitude),
+        str(b.operatingHours),
+        str(b.contact) || null,
+        str(b.description) || null,
+        facilitiesList(b.facilities),
+        toNum(b.capacity),
+        b.status || 'open',
+        file(req),
+        req.params.id,
+      ]
+    );
+
+    const centre = result.rows[0];
+    const changes = diffFields(before.rows[0], centre, {
+      name: 'Name',
+      address: 'Address',
+      latitude: 'Latitude',
+      longitude: 'Longitude',
+      operating_hours: 'Operating hours',
+      contact: 'Contact',
+      description: 'Description',
+      facilities: 'Facilities',
+      capacity: 'Capacity',
+      status: 'Operational status',
+      image_url: 'Photo',
+    });
+    await logActivity(req, {
+      action: 'Updated cooling centre',
+      module: 'Cooling Centres',
+      recordType: 'cooling_centre',
+      recordId: centre.id,
+      summary: `Updated cooling centre "${centre.name}"` + (Object.keys(changes).length ? '' : ' (no field changes)'),
+      details: { changes },
+    });
+    res.json(centreOut(centre));
+  })
+);
 
 app.patch(
   '/api/admin/centres/:id/status',
@@ -572,26 +458,21 @@ app.patch(
     if (!['open', 'temporarily_closed', 'maintenance', 'unavailable'].includes(req.body.status)) {
       return res.status(400).json({ error: 'Invalid status.' });
     }
-
     const before = await pool.query('SELECT status FROM cooling_centres WHERE id=$1', [req.params.id]);
     if (!before.rowCount) return res.status(404).json({ error: 'Centre not found.' });
 
-    const result = await pool.query(
-      'UPDATE cooling_centres SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING *',
-      [req.body.status, req.params.id]
-    );
-
+    const result = await pool.query('UPDATE cooling_centres SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING *', [
+      req.body.status,
+      req.params.id,
+    ]);
     await logActivity(req, {
       action: 'Updated centre status',
       module: 'Cooling Centres',
       recordType: 'cooling_centre',
       recordId: result.rows[0].id,
       summary: `Changed "${result.rows[0].name}" status to ${req.body.status}`,
-      details: {
-        changes: { 'Operational status': { from: before.rows[0].status, to: req.body.status } },
-      },
+      details: { changes: { 'Operational status': { from: before.rows[0].status, to: req.body.status } } },
     });
-
     res.json(centreOut(result.rows[0]));
   })
 );
@@ -601,11 +482,8 @@ app.delete(
   auth,
   admin,
   ar(async (req, res) => {
-    const result = await pool.query('DELETE FROM cooling_centres WHERE id=$1 RETURNING id,name', [
-      req.params.id,
-    ]);
+    const result = await pool.query('DELETE FROM cooling_centres WHERE id=$1 RETURNING id,name', [req.params.id]);
     if (!result.rowCount) return res.status(404).json({ error: 'Centre not found.' });
-
     await logActivity(req, {
       action: 'Deleted cooling centre',
       module: 'Cooling Centres',
@@ -613,14 +491,13 @@ app.delete(
       recordId: result.rows[0].id,
       summary: `Deleted cooling centre "${result.rows[0].name}"`,
     });
-
     res.json({ message: 'Deleted' });
   })
 );
 
-/* ------------------------------------------------------------------ */
-/* User reports                                                        */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Community reports
+   ========================================================================== */
 
 app.post(
   '/api/reports',
@@ -628,37 +505,22 @@ app.post(
   upload.single('image'),
   ar(async (req, res) => {
     const b = req.body;
-
     if (!str(b.title) || !str(b.category) || !str(b.description) || !str(b.location)) {
-      return res
-        .status(400)
-        .json({ error: 'Title, category, description and location are required.' });
+      return res.status(400).json({ error: 'Title, category, description and location are required.' });
     }
-
-    const lat = n(b.latitude);
-    const lon = n(b.longitude);
-
+    const lat = toNum(b.latitude);
+    const lon = toNum(b.longitude);
     if ((lat == null) !== (lon == null)) {
       return res.status(400).json({ error: 'Provide both coordinates or leave both empty.' });
     }
-    if (lat != null && !kl(lat, lon)) {
+    if (lat != null && !inKL(lat, lon)) {
       return res.status(400).json({ error: 'Reports must be located in Kuala Lumpur.' });
     }
 
     const result = await pool.query(
       'INSERT INTO user_reports(user_id,title,category,description,location_text,latitude,longitude,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-      [
-        req.session.user.id,
-        str(b.title),
-        str(b.category),
-        str(b.description),
-        str(b.location),
-        lat,
-        lon,
-        file(req),
-      ]
+      [req.session.user.id, str(b.title), str(b.category), str(b.description), str(b.location), lat, lon, file(req)]
     );
-
     res.status(201).json(result.rows[0]);
   })
 );
@@ -667,10 +529,9 @@ app.get(
   '/api/reports/mine',
   auth,
   ar(async (req, res) => {
-    const result = await pool.query(
-      'SELECT * FROM user_reports WHERE user_id=$1 ORDER BY created_at DESC',
-      [req.session.user.id]
-    );
+    const result = await pool.query('SELECT * FROM user_reports WHERE user_id=$1 ORDER BY created_at DESC', [
+      req.session.user.id,
+    ]);
     res.json(result.rows);
   })
 );
@@ -680,17 +541,14 @@ app.get(
   auth,
   admin,
   ar(async (req, res) => {
-    const status = ['pending', 'approved', 'rejected'].includes(req.query.status)
-      ? req.query.status
-      : null;
-
+    const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : null;
     const result = await pool.query(
-      `SELECT r.*,u.full_name reporter_name,u.email reporter_email FROM user_reports r JOIN users u ON u.id=r.user_id ${
-        status ? 'WHERE r.status=$1' : ''
-      } ORDER BY r.created_at DESC`,
+      `SELECT r.*,u.full_name reporter_name,u.email reporter_email
+         FROM user_reports r JOIN users u ON u.id=r.user_id
+         ${status ? 'WHERE r.status=$1' : ''}
+        ORDER BY r.created_at DESC`,
       status ? [status] : []
     );
-
     res.json(result.rows);
   })
 );
@@ -703,37 +561,33 @@ app.post(
   ar(async (req, res) => {
     const status = req.body.status;
     const note = str(req.body.note);
-
-    if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'Choose approve or reject.' });
-    }
-    if (status === 'rejected' && !note) {
-      return res.status(400).json({ error: 'A rejection reason is required.' });
-    }
+    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'Choose approve or reject.' });
+    if (status === 'rejected' && !note) return res.status(400).json({ error: 'A rejection reason is required.' });
 
     const result = await pool.query(
-      'UPDATE user_reports SET status=$1,review_note=$2,reviewed_by=$3,reviewed_at=NOW(),review_image_url=COALESCE($4,review_image_url),updated_at=NOW() WHERE id=$5 RETURNING *',
+      `UPDATE user_reports SET status=$1,review_note=$2,reviewed_by=$3,reviewed_at=NOW(),
+              review_image_url=COALESCE($4,review_image_url),updated_at=NOW()
+        WHERE id=$5 RETURNING *`,
       [status, note || null, req.session.user.id, file(req), req.params.id]
     );
-
     if (!result.rowCount) return res.status(404).json({ error: 'Report not found.' });
 
+    const approved = status === 'approved';
     await logActivity(req, {
-      action: status === 'approved' ? 'Approved user report' : 'Rejected user report',
+      action: approved ? 'Approved user report' : 'Rejected user report',
       module: 'Report Review',
       recordType: 'user_report',
       recordId: result.rows[0].id,
-      summary: `${status === 'approved' ? 'Approved' : 'Rejected'} report "${result.rows[0].title}"`,
+      summary: `${approved ? 'Approved' : 'Rejected'} report "${result.rows[0].title}"`,
       details: note ? { note, evidence: file(req) } : null,
     });
-
     res.json(result.rows[0]);
   })
 );
 
-/* ------------------------------------------------------------------ */
-/* Dashboards                                                          */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Dashboards
+   ========================================================================== */
 
 app.get(
   '/api/admin/dashboard',
@@ -742,14 +596,26 @@ app.get(
   ar(async (_req, res) => {
     const [centres, reports, users, heat, riskLevels, hotspots] = await Promise.all([
       pool.query(
-        `SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE c.status='open' AND c.verified AND NOT ${EXPIRED_SQL})::int open,COUNT(*) FILTER(WHERE c.verification_status='pending' OR (c.verification_status='verified' AND c.next_inspection_date IS NOT NULL AND c.next_inspection_date<=${TODAY_KL}+30))::int attention FROM cooling_centres c`
+        `SELECT COUNT(*)::int total,
+                COUNT(*) FILTER(WHERE c.status='open' AND c.verified AND NOT ${EXPIRED_SQL})::int open,
+                COUNT(*) FILTER(WHERE c.verification_status='pending'
+                                 OR (c.verification_status='verified' AND c.next_inspection_date IS NOT NULL
+                                     AND c.next_inspection_date<=${TODAY_KL}+30))::int attention
+           FROM cooling_centres c`
       ),
       pool.query(
-        "SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE status='pending')::int pending,COUNT(*) FILTER(WHERE status='approved')::int approved,COUNT(*) FILTER(WHERE status='rejected')::int rejected FROM user_reports"
+        `SELECT COUNT(*)::int total,
+                COUNT(*) FILTER(WHERE status='pending')::int pending,
+                COUNT(*) FILTER(WHERE status='approved')::int approved,
+                COUNT(*) FILTER(WHERE status='rejected')::int rejected
+           FROM user_reports`
       ),
       pool.query("SELECT COUNT(*)::int total FROM users WHERE role='user'"),
       pool.query(
-        "SELECT ROUND(AVG(heat_index_c)::numeric,1)::float avg_heat,ROUND(MAX(heat_index_c)::numeric,1)::float max_heat,MAX(observed_at) last_reading FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '24 hours'"
+        `SELECT ROUND(AVG(heat_index_c)::numeric,1)::float avg_heat,
+                ROUND(MAX(heat_index_c)::numeric,1)::float max_heat,
+                MAX(observed_at) last_reading
+           FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '24 hours'`
       ),
       pool.query(
         "SELECT risk_level,COUNT(*)::int count FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '7 days' GROUP BY risk_level"
@@ -773,7 +639,7 @@ app.get(
 app.get(
   '/api/dashboard/public',
   ar(async (_req, res) => {
-    const [heat, levels, approved] = await Promise.all([
+    const [heat, riskLevels, reports] = await Promise.all([
       pool.query(
         "SELECT ROUND(AVG(heat_index_c)::numeric,1)::float avg_heat,MAX(observed_at) last_reading FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '24 hours'"
       ),
@@ -782,46 +648,29 @@ app.get(
       ),
       pool.query("SELECT COUNT(*)::int total FROM user_reports WHERE status='approved'"),
     ]);
-
-    res.json({
-      heat: heat.rows[0],
-      riskLevels: levels.rows,
-      approvedReports: approved.rows[0].total,
-    });
+    res.json({ heat: heat.rows[0], riskLevels: riskLevels.rows, approvedReports: reports.rows[0].total });
   })
 );
 
-/* ------------------------------------------------------------------ */
-/* Other admin features (alerts, users, activity log, ...)             */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Feature modules (routes live in their own files)
+   ========================================================================== */
 
 registerAdminFeatures(app, { auth, admin, ar, upload, str, file });
+registerEmailAuth(app, { ar, str }); // verify-email, resend-verification, forgot-password, reset-password
 
-/* ------------------------------------------------------------------ */
-/* Error handler + start                                               */
-/* ------------------------------------------------------------------ */
+/* ==========================================================================
+   Error handler + start
+   ========================================================================== */
 
-app.use((e, _req, res, _next) => {
-  console.error(e.stack || e.message);
-
-  if (e instanceof multer.MulterError) {
-    return res.status(400).json({
-      error:
-        e.code === 'LIMIT_FILE_SIZE'
-          ? 'Each image must be at most 5 MB.'
-          : e.code === 'LIMIT_FILE_COUNT'
-            ? 'A centre can have up to 10 photos.'
-            : 'Image upload failed. Check file types and upload count.',
-    });
+app.use((err, _req, res, _next) => {
+  console.error(err.stack || err.message);
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Image limit is 5 MB.' : 'Image upload failed.' });
   }
-
-  if (e.message === 'Unexpected field') {
-    return res.status(400).json({ error: 'Unexpected upload field.' });
-  }
-
-  res.status(e.status || 500).json({
-    error: e.status ? e.message : 'Server error. Check the API terminal.',
-  });
+  if (err.message === 'Unexpected field') return res.status(400).json({ error: 'Unexpected upload field.' });
+  res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error. Check the API terminal.' });
 });
 
+verifyMailer();
 app.listen(PORT, () => console.log(`HeatSafe KL API running on http://localhost:${PORT}`));
