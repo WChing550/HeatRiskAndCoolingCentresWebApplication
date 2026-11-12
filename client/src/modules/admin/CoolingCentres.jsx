@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { Building2, Search, Plus, LocateFixed, ArrowLeft, MapPin, Clock3, Phone, Users, Wrench, CheckCircle2, BadgeCheck } from 'lucide-react';
 import CentreAddressVerifier from '../../components/CentreAddressVerifier.jsx';
 import CentreLocationMap from '../../components/CentreLocationMap.jsx';
+import CoolingCentresDirectoryMap from '../../components/CoolingCentresDirectoryMap.jsx';
 import CentrePhotoEditor from '../../components/CentrePhotoEditor.jsx';
 import CentreGallery from '../../components/CentreGallery.jsx';
 import { centrePhotos } from '../../lib/centrePhotos.js';
@@ -472,6 +473,17 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
         )}
         <small>{filteredCentres.length} locations</small>
       </div>
+
+      {!isAdmin && (
+        <>
+          {weatherError && <div className="notice" role="alert">{weatherError}</div>}
+          <CoolingCentresDirectoryMap
+            centres={filteredCentres}
+            location={userCoords}
+            onOpen={openCentre}
+          />
+        </>
+      )}
 
       <div className="centre-tiles">
         {filteredCentres.map(centre => (

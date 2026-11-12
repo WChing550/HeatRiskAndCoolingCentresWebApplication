@@ -1,19 +1,361 @@
 import React from 'react';
 import { Line } from 'react-chartjs-2';
-import { ArrowUpRight, ShieldCheck, ClipboardList, Building2, Users, ThermometerSun, ArrowRight, BellRing, CheckCircle2 } from 'lucide-react';
+import {
+  ArrowUpRight,
+  ShieldCheck,
+  ClipboardList,
+  Building2,
+  Users,
+  ThermometerSun,
+  ArrowRight,
+  BellRing,
+  CheckCircle2,
+} from 'lucide-react';
 
-export default function AdminOverview({ctx}) {
-  const {user,weather,dash,history,reports,centres,P,Metric,Panel,Empty,dt,status}=ctx;
-  const pending=dash?.reports?.pending;
-  const attention=dash?.centres?.attention;
-  const open=centres.filter(c=>c.verified&&c.status==='open').length;
-  const data={labels:history.map(r=>new Date(r.day).toLocaleDateString(undefined,{day:'numeric',month:'short'})),datasets:[{label:'Average heat index °C',data:history.map(r=>r.avg_heat_index),borderColor:'#6c8fbc',backgroundColor:'#b8cfe833',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#fff',pointBorderWidth:2,borderWidth:2}]};
-  const options={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#7c818a',font:{size:10}}},y:{grid:{color:'#e4e8ee'},ticks:{color:'#7c818a',font:{size:10}}}}};
-  return <div className="admin-overview">
-    <section className="operations-hero"><div className="operations-copy"><span className="mono"><span className="tiny-star">✳</span> THE CITY, IN YOUR CARE</span><h2>A clearer picture.<br/><em>A better response.</em></h2><p>Welcome, {user?.fullName?.split(' ')[0] || 'Administrator'}. Keep a pulse on the heat,<br className="desktop-break"/> support your community, and make every action count.</p><button className="btn primary" onClick={()=>P('reports')}>Open report queue<ArrowUpRight size={16}/></button></div><div className="operations-orbit" aria-hidden="true"><div className="ops-orb"/><div className="ops-ring r1"/><div className="ops-ring r2"/><div className="ops-ring r3"/><span className="ops-star">✳</span></div><div className="operations-reading"><span className="mono">LATEST HEAT INDEX</span><strong>{weather?weather.heat_index_c:'—'}<small>°C</small></strong><span className={'ops-risk '+(weather?.risk_level||'')}>{weather?.risk_level?weather.risk_level+' risk':'Awaiting reading'}</span><small>{weather?dt(weather.observed_at):'Connect weather service'}</small></div></section>
-    <div className="admin-section-title"><div><span className="mono">01 / THE ESSENTIALS</span><h3>Your operational pulse</h3></div><span className="admin-section-note"><ShieldCheck size={14}/>Community intelligence</span></div>
-    <div className="metrics admin-metrics"><Metric icon={ClipboardList} label="Reports to review" value={pending??'—'} note={dash?`${dash.reports?.total??0} total submissions`:'Awaiting dashboard data'} color="orange"/><Metric icon={Building2} label="Cooling centres" value={dash?.centres?.total??'—'} note={dash?`${open} verified and marked open`:'Awaiting dashboard data'} color="blue"/><Metric icon={Users} label="Community members" value={dash?.users?.total??'—'} note="Registered resident accounts" color="purple"/><Metric icon={ThermometerSun} label="24h average heat index" value={dash?.heat?.avg_heat!=null?dash.heat.avg_heat+'°C':'—'} note={dash?.heat?.max_heat!=null?'Peak reading '+dash.heat.max_heat+'°C':'No readings recorded'} color="green"/></div>
-    <div className="operations-grid"><Panel title="The heat, over time" sub="Daily average heat index · past seven days" action="Explore analytics" click={()=>P('trends')}>{history.length?<div className="chart ops-chart"><Line data={data} options={options}/></div>:<Empty title="Your city picture starts here" text="Recorded weather readings will appear as a daily trend."/>}<div className="chart-footnote"><span><i/>Heat index °C</span><span>Observe. Understand. Act.</span></div></Panel><section className="priority-panel"><div className="priority-head"><span className="mono">02 / NEXT IN FOCUS</span><h3>Small actions.<br/><em>Meaningful impact.</em></h3></div><button className="priority-row" onClick={()=>P('reports')}><span className="priority-icon"><ClipboardList size={18}/></span><span><b>Community reports</b><small>{pending==null?'Check incoming submissions':pending===0?'All caught up — thank you.':pending+' awaiting your review'}</small></span><ArrowUpRight size={18}/></button><button className="priority-row" onClick={()=>P('verification')}><span className="priority-icon"><ShieldCheck size={18}/></span><span><b>Centre verification</b><small>{attention==null?'Review inspection schedules':attention===0?'No centres flagged for attention':attention+' centres need attention'}</small></span><ArrowUpRight size={18}/></button><button className="priority-row" onClick={()=>P('alerts')}><span className="priority-icon"><BellRing size={18}/></span><span><b>Heat advisories</b><small>Keep your community informed</small></span><ArrowUpRight size={18}/></button></section></div>
-    <Panel title="A voice from the neighbourhood" sub="Recent community submissions" action="All reports" click={()=>P('reports')}>{reports.length?<div className="admin-recent">{reports.slice(0,4).map((r,i)=><button key={r.id} onClick={()=>P('reports')}><span className="recent-number mono">{String(i+1).padStart(2,'0')}</span><span><b>{r.title}</b><small>{r.location_text}</small></span><span className={'pill '+r.status}>{status(r.status)}</span><ArrowRight size={17}/></button>)}</div>:<div className="ops-empty"><CheckCircle2 size={25}/><div><b>A quiet queue. A watchful city.</b><p>New community reports will appear here when submitted.</p></div></div>}</Panel>
-  </div>;
+export default function AdminOverview({ ctx }) {
+  const {
+    user,
+    weather,
+    dash,
+    history,
+    reports,
+    centres,
+    P,
+    Metric,
+    Panel,
+    Empty,
+    dt,
+    status,
+  } = ctx;
+
+  const pending = dash?.reports?.pending;
+  const attention = dash?.centres?.attention;
+  const open = centres.filter(
+    c => c.verified && c.status === 'open'
+  ).length;
+
+  const data = {
+    labels: history.map(r =>
+      new Date(r.day).toLocaleDateString(undefined, {
+        day: 'numeric',
+        month: 'short',
+      })
+    ),
+    datasets: [
+      {
+        label: 'Average heat index °C',
+        data: history.map(r => r.avg_heat_index),
+        borderColor: '#6c8fbc',
+        backgroundColor: '#b8cfe833',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#fff',
+        pointBorderWidth: 2,
+        borderWidth: 2,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+    },
+    scales: {
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: '#7c818a',
+          font: {
+            size: 10,
+          },
+        },
+      },
+      y: {
+        grid: {
+          color: '#e4e8ee',
+        },
+        ticks: {
+          color: '#7c818a',
+          font: {
+            size: 10,
+          },
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="admin-overview">
+      <section className="operations-hero">
+        <div className="operations-copy">
+          <span className="mono">
+            <span className="tiny-star">✳</span> THE CITY, IN YOUR CARE
+          </span>
+
+          <h2>
+            A clearer picture.
+            <br />
+            <em>A better response.</em>
+          </h2>
+
+          <p>
+            Welcome, {user?.fullName?.split(' ')[0] || 'Administrator'}.
+            Keep a pulse on the heat,
+            <br className="desktop-break" /> support your community, and
+            make every action count.
+          </p>
+
+          <button
+            className="btn primary"
+            onClick={() => P('reports')}
+          >
+            Open report queue
+            <ArrowUpRight size={16} />
+          </button>
+        </div>
+
+        <div className="operations-orbit" aria-hidden="true">
+          <div className="ops-orb" />
+          <div className="ops-ring r1" />
+          <div className="ops-ring r2" />
+          <div className="ops-ring r3" />
+          <span className="ops-star">✳</span>
+        </div>
+
+        <div className="operations-reading">
+          <span className="mono">LATEST HEAT INDEX</span>
+
+          <strong>
+            {weather ? weather.heat_index_c : '—'}
+            <small>°C</small>
+          </strong>
+
+          <span className={'ops-risk ' + (weather?.risk_level || '')}>
+            {weather?.risk_level
+              ? weather.risk_level + ' risk'
+              : 'Awaiting reading'}
+          </span>
+
+          <small>
+            {weather
+              ? dt(weather.observed_at)
+              : 'Connect weather service'}
+          </small>
+        </div>
+      </section>
+
+      <div className="admin-section-title">
+        <div>
+          <span className="mono">01 / THE ESSENTIALS</span>
+          <h3>Your operational pulse</h3>
+        </div>
+
+        <span className="admin-section-note">
+          <ShieldCheck size={14} />
+          Community intelligence
+        </span>
+      </div>
+
+      <div className="metrics admin-metrics">
+        <Metric
+          icon={ClipboardList}
+          label="Reports to review"
+          value={pending ?? '—'}
+          note={
+            dash
+              ? `${dash.reports?.total ?? 0} total submissions`
+              : 'Awaiting dashboard data'
+          }
+          color="orange"
+        />
+
+        <Metric
+          icon={Building2}
+          label="Cooling centres"
+          value={dash?.centres?.total ?? '—'}
+          note={
+            dash
+              ? `${open} verified and marked open`
+              : 'Awaiting dashboard data'
+          }
+          color="blue"
+        />
+
+        <Metric
+          icon={Users}
+          label="Community members"
+          value={dash?.users?.total ?? '—'}
+          note="Registered resident accounts"
+          color="purple"
+        />
+
+        <Metric
+          icon={ThermometerSun}
+          label="24h average heat index"
+          value={
+            dash?.heat?.avg_heat != null
+              ? dash.heat.avg_heat + '°C'
+              : '—'
+          }
+          note={
+            dash?.heat?.max_heat != null
+              ? 'Peak reading ' + dash.heat.max_heat + '°C'
+              : 'No readings recorded'
+          }
+          color="green"
+        />
+      </div>
+
+      <div className="operations-grid">
+        <Panel
+          title="The heat, over time"
+          sub="Daily average heat index · past seven days"
+          action="Explore analytics"
+          click={() => P('trends')}
+        >
+          {history.length ? (
+            <div className="chart ops-chart">
+              <Line data={data} options={options} />
+            </div>
+          ) : (
+            <Empty
+              title="Your city picture starts here"
+              text="Recorded weather readings will appear as a daily trend."
+            />
+          )}
+
+          <div className="chart-footnote">
+            <span>
+              <i />
+              Heat index °C
+            </span>
+            <span>Observe. Understand. Act.</span>
+          </div>
+        </Panel>
+
+        <section className="priority-panel">
+          <div className="priority-head">
+            <span className="mono">02 / NEXT IN FOCUS</span>
+
+            <h3>
+              Small actions.
+              <br />
+              <em>Meaningful impact.</em>
+            </h3>
+          </div>
+
+          <button
+            className="priority-row"
+            onClick={() => P('reports')}
+          >
+            <span className="priority-icon">
+              <ClipboardList size={18} />
+            </span>
+
+            <span>
+              <b>Community reports</b>
+              <small>
+                {pending == null
+                  ? 'Check incoming submissions'
+                  : pending === 0
+                    ? 'All caught up — thank you.'
+                    : pending + ' awaiting your review'}
+              </small>
+            </span>
+
+            <ArrowUpRight size={18} />
+          </button>
+
+          <button
+            className="priority-row"
+            onClick={() => P('verification')}
+          >
+            <span className="priority-icon">
+              <ShieldCheck size={18} />
+            </span>
+
+            <span>
+              <b>Centre verification</b>
+              <small>
+                {attention == null
+                  ? 'Review inspection schedules'
+                  : attention === 0
+                    ? 'No centres flagged for attention'
+                    : attention + ' centres need attention'}
+              </small>
+            </span>
+
+            <ArrowUpRight size={18} />
+          </button>
+
+          <button
+            className="priority-row"
+            onClick={() => P('alerts')}
+          >
+            <span className="priority-icon">
+              <BellRing size={18} />
+            </span>
+
+            <span>
+              <b>Heat advisories</b>
+              <small>Keep your community informed</small>
+            </span>
+
+            <ArrowUpRight size={18} />
+          </button>
+        </section>
+      </div>
+
+      <Panel
+        title="A voice from the neighbourhood"
+        sub="Recent community submissions"
+        action="All reports"
+        click={() => P('reports')}
+      >
+        {reports.length ? (
+          <div className="admin-recent">
+            {reports.slice(0, 4).map((r, i) => (
+              <button
+                key={r.id}
+                onClick={() => P('reports')}
+              >
+                <span className="recent-number mono">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+
+                <span>
+                  <b>{r.title}</b>
+                  <small>{r.location_text}</small>
+                </span>
+
+                <span className={'pill ' + r.status}>
+                  {status(r.status)}
+                </span>
+
+                <ArrowRight size={17} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="ops-empty">
+            <CheckCircle2 size={25} />
+
+            <div>
+              <b>A quiet queue. A watchful city.</b>
+              <p>
+                New community reports will appear here when submitted.
+              </p>
+            </div>
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
 }
