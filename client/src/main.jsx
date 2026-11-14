@@ -5,6 +5,7 @@ import './styles.css';
 import './design.css';
 import './premium.css';
 import './centre-features.css';
+import './dark-theme.css';
 import App from './App.jsx';
 import Motion from './components/Motion.jsx';
 createRoot(document.getElementById('root')).render(<React.StrictMode><Motion><App /></Motion></React.StrictMode>);
