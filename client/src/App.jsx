@@ -8,7 +8,8 @@ import WorkspaceNav from './components/WorkspaceNav.jsx';
 import AdminOverview from './modules/admin/AdminOverview.jsx';
 import { Sun, Activity, MapPin, ThermometerSun, Users, ClipboardList, Building2, LogOut, Menu, X, Plus, Search, CheckCircle2, XCircle, Clock3, FileText, Eye, RefreshCw, LayoutDashboard, UserRound, HeartPulse, LocateFixed, ShieldCheck, BellRing, ScrollText } from 'lucide-react';
 import { Field, Photo, Metric, Panel, Empty, ReportTable, ReportCard, PasswordPanel } from './components/Shared.jsx';
-import CoolingCentres from './modules/admin/CoolingCentres.jsx';
+import AdminCoolingCentres from './modules/admin/CoolingCentres.jsx';
+import UserCoolingCentres from './modules/user/CoolingCentres.jsx';
 import Overview from './modules/user/Overview.jsx';
 import HeatRisk from './modules/user/HeatRisk.jsx';
 import SubmitReport from './modules/user/SubmitReport.jsx';
@@ -435,21 +436,7 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <ThemeToggle />
 
-              {isAdmin && page !== 'heat' && (
-                <button
-                  className="btn secondary weather-refresh"
-                  disabled={weatherLoading}
-                  onClick={refreshWeather}
-                >
-                  <RefreshCw
-                    size={15}
-                    className={weatherLoading ? 'spin' : ''}
-                  />
-                  {weatherLoading
-                    ? 'Refreshing Kuala Lumpur weather…'
-                    : 'Refresh Kuala Lumpur weather'}
-                </button>
-              )}
+
             </div>
 
           </div>
@@ -486,13 +473,9 @@ function App() {
 
           {page === 'heat' && <HeatRisk ctx={ctx} />}
 
-          {(page === 'centres' || page === 'centreform') && (
-            <CoolingCentres
+          {(page === 'centres' || page === 'centreform') && isAdmin && (
+            <AdminCoolingCentres
               page={page}
-              userCoords={userCoords}
-              locate={locate}
-              weatherError={localWeatherError}
-              isAdmin={isAdmin}
               attention={dash?.centres?.attention || 0}
               centres={centres}
               loaded={centresLoaded}
@@ -500,6 +483,17 @@ function App() {
               setError={E}
               setSuccess={S}
               setPage={goPage}
+            />
+          )}
+
+          {page === 'centres' && !isAdmin && (
+            <UserCoolingCentres
+              page={page}
+              userCoords={userCoords}
+              locate={locate}
+              locationError={localWeatherError}
+              centres={centres}
+              loaded={centresLoaded}
             />
           )}
 
