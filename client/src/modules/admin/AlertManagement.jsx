@@ -72,10 +72,6 @@ export default function AlertManagement({ ctx }) {
 
   return (
     <>
-      <div className="notice" style={{ background: '#fff8ec', color: '#8a5f14', borderColor: '#f3dfb7' }}>
-        Alerts created here are <b>HeatSafe KL administrator advisories</b>. They are labelled for users as "not an official government emergency warning" and must not replace official alerts.
-      </div>
-
       <div className="metrics">
         <Metric icon={Radio} label="Live now" value={counts.active || 0} note="Visible to users" color="orange" />
         <Metric icon={CalendarClock} label="Scheduled" value={counts.scheduled || 0} note="Published, not started" color="blue" />
