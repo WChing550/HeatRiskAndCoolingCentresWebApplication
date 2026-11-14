@@ -1,8 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Building2, Search, Plus, LocateFixed, ArrowLeft, MapPin, Clock3, Phone, Users, Wrench, CheckCircle2, BadgeCheck } from 'lucide-react';
+import { Building2, Search, Plus, ArrowLeft, MapPin, Clock3, Phone, Wrench, CheckCircle2, BadgeCheck } from 'lucide-react';
 import CentreAddressVerifier from '../../components/CentreAddressVerifier.jsx';
 import CentreLocationMap from '../../components/CentreLocationMap.jsx';
-import CoolingCentresDirectoryMap from '../../components/CoolingCentresDirectoryMap.jsx';
 import CentrePhotoEditor from '../../components/CentrePhotoEditor.jsx';
 import CentreGallery from '../../components/CentreGallery.jsx';
 import { centrePhotos } from '../../lib/centrePhotos.js';
@@ -11,21 +10,6 @@ import { Field, Empty } from '../../components/Shared.jsx';
 import { api, asset, status } from '../../lib/api.js';
 
 const EMPTY_CENTRE = { name: '', address: '', latitude: '3.1390', longitude: '101.6869', operatingHours: '', contact: '', description: '', facilities: '', capacity: '', status: 'open' };
-
-// Haversine formula to calculate straight-line distance in kilometers
-function getDistanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
 
 function DetailRow({ icon: Icon, label, children }) {
   return (
@@ -39,7 +23,7 @@ function DetailRow({ icon: Icon, label, children }) {
   );
 }
 
-function CentreTile({ centre, onOpen, distance }) {
+function CentreTile({ centre, onOpen }) {
   const tile = useRef(null);
   const address = useRef(null);
 
@@ -75,23 +59,7 @@ function CentreTile({ centre, onOpen, distance }) {
     >
       <div className="centre-tile-photo" style={{ position: 'relative' }}>
         {cover ? <img src={asset(cover)} alt="" loading="lazy" /> : <Building2 size={40} />}
-        {distance != null && (
-          <span
-            style={{
-              position: 'absolute',
-              top: '8px',
-              right: '8px',
-              background: 'rgba(0, 0, 0, 0.75)',
-              color: '#fff',
-              padding: '3px 8px',
-              borderRadius: '12px',
-              fontSize: '0.75rem',
-              fontWeight: '600',
-            }}
-          >
-            {distance.toFixed(1)} km
-          </span>
-        )}
+
       </div>
       <div className="centre-tile-caption">
         <h3>{centre.name}</h3>
@@ -108,7 +76,7 @@ function CentreTile({ centre, onOpen, distance }) {
   );
 }
 
-export default function CoolingCentres({ page, userCoords, locate, weatherError, isAdmin, attention = 0, centres = [], loaded = true, refresh, setError, setSuccess, setPage }) {
+export default function AdminCoolingCentres({ page, attention = 0, centres = [], loaded = true, refresh, setError, setSuccess, setPage }) {
   const [search, setSearch] = useState('');
   const [centreEdit, setCentreEdit] = useState(null);
   const [selectedId, setSelectedId] = useState(() => location.hash.match(/^#\/centres\/(\d+)$/)?.[1] || null);
@@ -134,7 +102,7 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
-  const selectedCentre = centres.find(c => String(c.id) === String(selectedId) && (isAdmin || isPublishedCentre(c)));
+  const selectedCentre = centres.find(c => String(c.id) === String(selectedId));
 
   function openCentre(centre) {
     if (!location.hash.startsWith('#/centres')) history.replaceState(null, '', location.pathname + location.search + '#/centres');
@@ -149,29 +117,10 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
-  // Filter centres and calculate distance / sort nearest if userCoords are detected
-  const filteredCentres = useMemo(() => {
-    return centres
-      .filter(c => isPublishedCentre(c) && `${c.name} ${c.address}`.toLowerCase().includes(search.toLowerCase()))
-      .map(c => {
-        let distance = null;
-        if (userCoords?.latitude && userCoords?.longitude && c.latitude && c.longitude) {
-          distance = getDistanceKm(
-            Number(userCoords.latitude),
-            Number(userCoords.longitude),
-            Number(c.latitude),
-            Number(c.longitude)
-          );
-        }
-        return { ...c, distance };
-      })
-      .sort((a, b) => {
-        if (a.distance !== null && b.distance !== null) {
-          return a.distance - b.distance; // Nearest first
-        }
-        return 0;
-      });
-  }, [centres, search, userCoords]);
+  const filteredCentres = useMemo(() => centres.filter(centre =>
+    isPublishedCentre(centre) &&
+    `${centre.name} ${centre.address}`.toLowerCase().includes(search.toLowerCase())
+  ), [centres, search]);
 
   const setCentreField = (key, value) => setCf(previous => ({ ...previous, [key]: value }));
 
@@ -255,9 +204,9 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
     }
   }
 
-  if (page === 'centreform' && isAdmin) {
+  if (page === 'centreform') {
     return (
-      <section className="panel">
+      <section className="panel admin-centres-page">
         <header className="panelhead">
           <div>
             <h3>{centreEdit ? 'Edit cooling centre' : 'Add cooling centre'}</h3>
@@ -378,24 +327,22 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
         </section>
       );
     return (
-      <section className="centre-details-page">
+      <section className="centre-details-page admin-centres-page">
         <div className="centre-details-toolbar">
           <button className="btn secondary" onClick={closeDetails}>
             <ArrowLeft size={15} />Back to cooling centres
           </button>
-          {isAdmin && (
-            <div>
-              <button className="btn secondary" onClick={() => setPage('verification')}>
-                Verification
-              </button>
-              <button className="btn primary" onClick={() => editCentre(selectedCentre)}>
-                Edit centre
-              </button>
-              <button className="btn danger-outline" onClick={() => delCentre(selectedCentre)}>
-                Delete centre
-              </button>
-            </div>
-          )}
+          <div>
+            <button className="btn secondary" onClick={() => setPage('verification')}>
+              Verification
+            </button>
+            <button className="btn primary" onClick={() => editCentre(selectedCentre)}>
+              Edit centre
+            </button>
+            <button className="btn danger-outline" onClick={() => delCentre(selectedCentre)}>
+              Delete centre
+            </button>
+          </div>
         </div>
         <header className="centre-details-title">
           <small className="eyebrow">COOLING CENTRE DETAILS</small>
@@ -421,14 +368,8 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
               <DetailRow icon={MapPin} label="Address">{selectedCentre.address}</DetailRow>
               <DetailRow icon={Clock3} label="Operating hours">{selectedCentre.operating_hours}</DetailRow>
               <DetailRow icon={Phone} label="Contact">{selectedCentre.contact}</DetailRow>
-              <DetailRow icon={Users} label="Capacity">{selectedCentre.capacity ?? 'Not provided'}</DetailRow>
-              <DetailRow icon={MapPin} label="Coordinates">{`${selectedCentre.latitude}, ${selectedCentre.longitude}`}</DetailRow>
-              {isAdmin && (
-                <>
-                  <DetailRow icon={CheckCircle2} label="Last inspection">{selectedCentre.last_inspection_date}</DetailRow>
-                  <DetailRow icon={Clock3} label="Next inspection due">{selectedCentre.next_inspection_date}</DetailRow>
-                </>
-              )}
+              <DetailRow icon={CheckCircle2} label="Last inspection">{selectedCentre.last_inspection_date}</DetailRow>
+              <DetailRow icon={Clock3} label="Next inspection due">{selectedCentre.next_inspection_date}</DetailRow>
               <DetailRow icon={Wrench} label="Facilities">{selectedCentre.facilities?.join(', ')}</DetailRow>
             </div>
             <div className="centre-detail-description">
@@ -443,54 +384,30 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
   }
 
   return (
-    <>
+    <div className="admin-centres-page">
       <div className="toolbar">
         <div className="search">
           <Search size={16} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search centre or address…" />
         </div>
 
-        {/* Locate me trigger utilizing the parent locate context helper */}
-        <button
-          type="button"
-          className={`btn ${userCoords ? 'primary' : 'secondary'}`}
-          onClick={() => locate && locate()}
-        >
-          <LocateFixed size={16} />
-          {userCoords ? 'Sorted by nearest' : 'Locate me'}
-        </button>
 
-        {isAdmin && (
-          <button type="button" className="btn primary" onClick={() => editCentre(null)}>
-            <Plus size={16} /> Add centre
-          </button>
-        )}
-        {isAdmin && (
-          <button type="button" className="btn secondary" onClick={() => setPage('verification')}>
-            <BadgeCheck size={16} /> Verification
-            {attention > 0 && <span className="btn-badge">{attention}</span>}
-          </button>
-        )}
+        <button type="button" className="btn primary" onClick={() => editCentre(null)}>
+          <Plus size={16} /> Add centre
+        </button>
+        <button type="button" className="btn secondary" onClick={() => setPage('verification')}>
+          <BadgeCheck size={16} /> Verification
+          {attention > 0 && <span className="btn-badge">{attention}</span>}
+        </button>
         <small>{filteredCentres.length} locations</small>
       </div>
 
-      {!isAdmin && (
-        <>
-          {weatherError && <div className="notice" role="alert">{weatherError}</div>}
-          <CoolingCentresDirectoryMap
-            centres={filteredCentres}
-            location={userCoords}
-            onOpen={openCentre}
-          />
-        </>
-      )}
 
       <div className="centre-tiles">
         {filteredCentres.map(centre => (
           <CentreTile
             key={centre.id}
             centre={centre}
-            distance={centre.distance}
             onOpen={openCentre}
           />
         ))}
@@ -499,13 +416,9 @@ export default function CoolingCentres({ page, userCoords, locate, weatherError,
       {!filteredCentres.length && (
         <Empty
           title="No cooling centres listed"
-          text={
-            isAdmin
-              ? 'Only verified centres appear here. Manage pending, rejected or expired centres in Verification.'
-              : 'No verified cooling-centre locations have been published. Check official local guidance for current assistance.'
-          }
+          text="Only verified centres appear here. Manage pending, rejected or expired centres in Verification."
         />
       )}
-    </>
+    </div>
   );
 }
