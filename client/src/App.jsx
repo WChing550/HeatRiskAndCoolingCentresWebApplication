@@ -64,7 +64,8 @@ function App() {
     [localWeatherError, LWE] = useState(''),
     [weatherScope, WS] = useState('city'),
     [weatherLoading, WL] = useState(false),
-    [centresLoaded, CL] = useState(false);
+    [centresLoaded, CL] = useState(false),
+    [locating, setLocating] = useState(false);
 
   const weatherRequests = useRef({ city: 0, location: 0 });
   const pendingWeather = useRef(0);
@@ -200,6 +201,7 @@ function App() {
     }
 
     LWE('');
+    setLocating(true);
 
     navigator.geolocation.getCurrentPosition(
       p => {
@@ -209,12 +211,18 @@ function App() {
         };
 
         SET_USER_COORDS(coords);
+        setLocating(false);
         if (typeof onLocated === 'function') onLocated(coords);
         getWeather(coords);
       },
-      () => LWE(
-        'Location permission denied. Allow location access in your browser settings and try again.',
-      ),
+      err => {
+        setLocating(false);
+        LWE(
+          err?.code === 1
+            ? 'Location permission denied. Allow location access in your browser settings and try again.'
+            : 'Could not get your location. Please try again.',
+        );
+      },
       {
         enableHighAccuracy: true,
         timeout: 10000,
@@ -305,6 +313,7 @@ function App() {
       ? weatherError
       : localWeatherError,
     locationError: localWeatherError,
+    locating,
     centres,
     reports,
     dash,
@@ -491,6 +500,7 @@ function App() {
               page={page}
               userCoords={userCoords}
               locate={locate}
+              locating={locating}
               locationError={localWeatherError}
               centres={centres}
               loaded={centresLoaded}

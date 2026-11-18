@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Building2, Search, LocateFixed, ArrowLeft, MapPin, Clock3, Phone, Wrench, CheckCircle2 } from 'lucide-react';
+import { Building2, Search, LocateFixed, ArrowDownUp, ArrowLeft, MapPin, Clock3, Phone, Wrench, CheckCircle2 } from 'lucide-react';
 import CentreLocationMap from '../../components/CentreLocationMap.jsx';
 import CoolingCentresDirectoryMap from '../../components/CoolingCentresDirectoryMap.jsx';
 import CentreGallery from '../../components/CentreGallery.jsx';
@@ -92,10 +92,13 @@ function CentreTile({ centre, onOpen, distance }) {
   );
 }
 
+const NEARBY_COUNT = 5; // how many nearest centres the map zooms to
+
 export default function UserCoolingCentres({
-  page, userCoords, locate, locationError, centres = [], loaded = true,
+  page, userCoords, locate, locating = false, locationError, centres = [], loaded = true,
 }) {
   const [search, setSearch] = useState('');
+  const [sortNearest, setSortNearest] = useState(true);
   const [selectedId, setSelectedId] = useState(() =>
     location.hash.match(/^#\/centres\/(\d+)$/)?.[1] || null
   );
@@ -125,6 +128,12 @@ export default function UserCoolingCentres({
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
+  // Locating always re-enables nearest sorting so the user sees results immediately
+  function handleLocate() {
+    setSortNearest(true);
+    locate?.();
+  }
+
   const filteredCentres = useMemo(() => centres
     .filter(centre => isPublishedCentre(centre) &&
       `${centre.name} ${centre.address}`.toLowerCase().includes(search.toLowerCase()))
@@ -137,8 +146,13 @@ export default function UserCoolingCentres({
         distance: hasCoordinates ? getDistanceKm(...coordinates.map(Number)) : null,
       };
     })
-    .sort((a, b) => a.distance != null && b.distance != null ? a.distance - b.distance : 0),
-  [centres, search, userCoords]);
+    .sort((a, b) => {
+      if (!userCoords || !sortNearest) return 0;
+      if (a.distance == null) return 1;
+      if (b.distance == null) return -1;
+      return a.distance - b.distance;
+    }),
+  [centres, search, userCoords, sortNearest]);
 
   if (page !== 'centres') return null;
 
@@ -195,13 +209,34 @@ export default function UserCoolingCentres({
           <Search size={16} />
           <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search centre or address…" />
         </div>
-        <button type="button" className={`btn ${userCoords ? 'primary' : 'secondary'}`} onClick={() => locate?.()}>
-          <LocateFixed size={16} />{userCoords ? 'Sorted by nearest' : 'Locate me'}
+        <button
+          type="button"
+          className={`btn ${userCoords ? 'primary' : 'secondary'}`}
+          onClick={handleLocate}
+          disabled={locating}
+        >
+          <LocateFixed size={16} />
+          {locating ? 'Locating…' : userCoords ? 'Update my location' : 'Locate me'}
+        </button>
+        <button
+          type="button"
+          className={`btn ${userCoords && sortNearest ? 'primary' : 'secondary'}`}
+          disabled={!userCoords}
+          aria-pressed={!!userCoords && sortNearest}
+          title={userCoords ? 'Toggle nearest-first order' : 'Tap "Locate me" first'}
+          onClick={() => setSortNearest(value => !value)}
+        >
+          <ArrowDownUp size={16} />Sort by nearest
         </button>
         <small>{filteredCentres.length} locations</small>
       </div>
       {locationError && <div className="notice" role="alert">{locationError}</div>}
-      <CoolingCentresDirectoryMap centres={filteredCentres} location={userCoords} onOpen={openCentre} />
+      <CoolingCentresDirectoryMap
+        centres={filteredCentres}
+        location={userCoords}
+        onOpen={openCentre}
+        nearbyCount={userCoords && sortNearest ? NEARBY_COUNT : 0}
+      />
       <div className="centre-tiles">
         {filteredCentres.map(centre => (
           <CentreTile key={centre.id} centre={centre} distance={centre.distance} onOpen={openCentre} />
