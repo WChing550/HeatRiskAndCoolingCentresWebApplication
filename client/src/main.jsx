@@ -5,6 +5,7 @@ import './styles.css';
 import './design.css';
 import './premium.css';
 import './centre-features.css';
+import './profile.css';
 import './dark-theme.css';
 import App from './App.jsx';
 import Motion from './components/Motion.jsx';

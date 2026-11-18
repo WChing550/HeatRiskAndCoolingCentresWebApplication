@@ -14,6 +14,7 @@ import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import { status } from '../lib/api.js';
 
 const KUALA_LUMPUR = [3.139, 101.6869];
+const MAX_NEARBY_KM = 25; // ignore "nearby" if the user is far from every centre
 
 const centreIcon = new Icon({
   iconUrl: markerUrl,
@@ -25,10 +26,33 @@ const centreIcon = new Icon({
   shadowSize: [41, 41],
 });
 
-function DirectoryMapView({ pins, location }) {
+function DirectoryMapView({ pins, location, nearbyCount }) {
   const map = useMap();
 
   useEffect(() => {
+    // 1. User located and "nearest" is on: show them plus the closest centres
+    if (location && nearbyCount > 0) {
+      const nearest = pins
+        .filter(pin => pin.centre.distance != null && pin.centre.distance <= MAX_NEARBY_KM)
+        .sort((a, b) => a.centre.distance - b.centre.distance)
+        .slice(0, nearbyCount);
+
+      if (nearest.length) {
+        map.fitBounds(
+          [[location.latitude, location.longitude], ...nearest.map(pin => pin.position)],
+          { padding: [40, 40], maxZoom: 15, animate: false },
+        );
+        return;
+      }
+    }
+
+    // 2. User located but nearest sort is off (or no centre nearby): centre on them
+    if (location && nearbyCount === 0) {
+      map.setView([location.latitude, location.longitude], 14, { animate: false });
+      return;
+    }
+
+    // 3. No location: show every centre
     if (pins.length) {
       map.fitBounds(pins.map(pin => pin.position), {
         padding: [30, 30],
@@ -38,15 +62,7 @@ function DirectoryMapView({ pins, location }) {
     } else {
       map.setView(KUALA_LUMPUR, 12, { animate: false });
     }
-  }, [map, pins]);
-
-  useEffect(() => {
-    if (location) {
-      map.setView([location.latitude, location.longitude], 14, {
-        animate: false,
-      });
-    }
-  }, [map, location]);
+  }, [map, pins, location, nearbyCount]);
 
   return null;
 }
@@ -55,6 +71,7 @@ export default function CoolingCentresDirectoryMap({
   centres,
   location,
   onOpen,
+  nearbyCount = 0,
 }) {
   const pins = useMemo(
     () => centres.flatMap(centre => {
@@ -83,7 +100,7 @@ export default function CoolingCentresDirectoryMap({
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <DirectoryMapView pins={pins} location={location} />
+        <DirectoryMapView pins={pins} location={location} nearbyCount={nearbyCount} />
 
         {pins.map(({ centre, position }) => (
           <Marker

@@ -25,6 +25,7 @@ import {
 } from './adminFeatures.js';
 import { registerEmailAuth, sendVerification, EMAIL_REGEX, PASSWORD_REGEX } from './emailAuth.js';
 import { verifyMailer } from './mailer.js';
+import { registerAccountFeatures } from './accountFeatures.js';
 
 /* ==========================================================================
    App setup
@@ -90,7 +91,16 @@ const facilitiesList = (value) => str(value).split(',').map((x) => x.trim()).fil
 const inKL = (lat, lon) => Number(lat) >= 3 && Number(lat) <= 3.3 && Number(lon) >= 101.55 && Number(lon) <= 101.8;
 
 // What the browser is allowed to know about a user
-const userSafe = (u) => ({ id: u.id, fullName: u.full_name, email: u.email, username: u.username, role: u.role });
+const userSafe = (u) => ({
+  id: u.id,
+  fullName: u.full_name,
+  email: u.email,
+  username: u.username,
+  role: u.role,
+  avatarUrl: u.avatar_url || null,
+  alertEmails: !!u.alert_emails,
+  createdAt: u.created_at,
+});
 
 const auth = (req, res, next) =>
   req.session.user ? next() : res.status(401).json({ error: 'Please sign in first.' });
@@ -102,7 +112,16 @@ const admin = (req, res, next) =>
    ========================================================================== */
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-app.get('/api/auth/me', (req, res) => res.json({ user: req.session.user || null }));
+app.get(
+  '/api/auth/me',
+  ar(async (req, res) => {
+    if (!req.session.user) return res.json({ user: null });
+    // Refresh from the database so avatar / preference changes always show
+    const r = await pool.query('SELECT * FROM users WHERE id=$1', [req.session.user.id]);
+    if (r.rowCount) req.session.user = userSafe(r.rows[0]);
+    res.json({ user: req.session.user });
+  })
+);
 
 app.post(
   '/api/auth/register',
@@ -658,6 +677,7 @@ app.get(
 
 registerAdminFeatures(app, { auth, admin, ar, upload, str, file });
 registerEmailAuth(app, { ar, str }); // verify-email, resend-verification, forgot-password, reset-password
+registerAccountFeatures(app, { auth, ar, str, upload, userSafe, uploadDir }); // avatar, preferences, favourites, feedback
 
 /* ==========================================================================
    Error handler + start

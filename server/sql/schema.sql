@@ -93,3 +93,23 @@ CREATE TABLE IF NOT EXISTS email_tokens(
   used_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id,purpose);
+
+-- 7. Profile: avatar, heat-advisory email preference, saved centres, app feedback
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_emails BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS favourite_centres(
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  centre_id BIGINT NOT NULL REFERENCES cooling_centres(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY(user_id,centre_id));
+CREATE INDEX IF NOT EXISTS idx_favourites_user ON favourite_centres(user_id,created_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_feedback(
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  kind VARCHAR(20) NOT NULL CHECK(kind IN('feedback','problem')),
+  subject VARCHAR(120) NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON app_feedback(created_at DESC);

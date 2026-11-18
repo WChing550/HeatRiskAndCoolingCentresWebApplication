@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Building2, Search, LocateFixed, ArrowDownUp, ArrowLeft, MapPin, Clock3, Phone, Wrench, CheckCircle2 } from 'lucide-react';
+import { Building2, Search, LocateFixed, ArrowDownUp, ArrowLeft, Heart, MapPin, Clock3, Phone, Wrench, CheckCircle2 } from 'lucide-react';
 import CentreLocationMap from '../../components/CentreLocationMap.jsx';
 import CoolingCentresDirectoryMap from '../../components/CoolingCentresDirectoryMap.jsx';
 import CentreGallery from '../../components/CentreGallery.jsx';
@@ -35,7 +35,7 @@ function DetailRow({ icon: Icon, label, children }) {
   );
 }
 
-function CentreTile({ centre, onOpen, distance }) {
+function CentreTile({ centre, onOpen, distance, saved, onToggleSaved }) {
   const tile = useRef(null);
   const address = useRef(null);
 
@@ -62,6 +62,7 @@ function CentreTile({ centre, onOpen, distance }) {
   const cover = centrePhotos(centre)[0];
 
   return (
+    <div className="centre-tile-wrap">
     <button
       ref={tile}
       type="button"
@@ -89,6 +90,17 @@ function CentreTile({ centre, onOpen, distance }) {
         </div>
       </div>
     </button>
+    <button
+      type="button"
+      className={'centre-fav' + (saved ? ' is-saved' : '')}
+      aria-pressed={saved}
+      aria-label={saved ? `Remove ${centre.name} from saved places` : `Save ${centre.name}`}
+      title={saved ? 'Remove from saved places' : 'Save this place'}
+      onClick={() => onToggleSaved(centre)}
+    >
+      <Heart size={18} fill={saved ? 'currentColor' : 'none'} />
+    </button>
+    </div>
   );
 }
 
@@ -96,9 +108,12 @@ const NEARBY_COUNT = 5; // how many nearest centres the map zooms to
 
 export default function UserCoolingCentres({
   page, userCoords, locate, locating = false, locationError, centres = [], loaded = true,
+  favIds = [], onToggleFavourite, signedIn = false, onSignIn,
 }) {
   const [search, setSearch] = useState('');
   const [sortNearest, setSortNearest] = useState(true);
+  const [favOnly, setFavOnly] = useState(false);
+  const [needSignIn, setNeedSignIn] = useState(false);
   const [selectedId, setSelectedId] = useState(() =>
     location.hash.match(/^#\/centres\/(\d+)$/)?.[1] || null
   );
@@ -128,6 +143,16 @@ export default function UserCoolingCentres({
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
+  const isSaved = centre => favIds.includes(String(centre.id));
+
+  function toggleSaved(centre) {
+    if (!signedIn) {
+      setNeedSignIn(true);
+      return;
+    }
+    onToggleFavourite?.(centre.id);
+  }
+
   // Locating always re-enables nearest sorting so the user sees results immediately
   function handleLocate() {
     setSortNearest(true);
@@ -136,6 +161,7 @@ export default function UserCoolingCentres({
 
   const filteredCentres = useMemo(() => centres
     .filter(centre => isPublishedCentre(centre) &&
+      (!favOnly || favIds.includes(String(centre.id))) &&
       `${centre.name} ${centre.address}`.toLowerCase().includes(search.toLowerCase()))
     .map(centre => {
       const coordinates = [userCoords?.latitude, userCoords?.longitude, centre.latitude, centre.longitude];
@@ -152,7 +178,7 @@ export default function UserCoolingCentres({
       if (b.distance == null) return -1;
       return a.distance - b.distance;
     }),
-  [centres, search, userCoords, sortNearest]);
+  [centres, search, userCoords, sortNearest, favOnly, favIds]);
 
   if (page !== 'centres') return null;
 
@@ -179,6 +205,21 @@ export default function UserCoolingCentres({
           <div className="centre-modal-badges">
             <span className={'pill ' + selectedCentre.status}>{status(selectedCentre.status)}</span>
             <span className="centre-verified"><CheckCircle2 size={14} />Verified facility</span>
+            {signedIn ? (
+              <button
+                type="button"
+                className={'btn secondary small centre-fav-inline' + (isSaved(selectedCentre) ? ' is-saved' : '')}
+                aria-pressed={isSaved(selectedCentre)}
+                onClick={() => toggleSaved(selectedCentre)}
+              >
+                <Heart size={14} fill={isSaved(selectedCentre) ? 'currentColor' : 'none'} />
+                {isSaved(selectedCentre) ? 'Saved' : 'Save place'}
+              </button>
+            ) : (
+              <button type="button" className="btn secondary small centre-fav-inline" onClick={() => onSignIn?.()}>
+                <Heart size={14} />Sign in to save
+              </button>
+            )}
           </div>
         </header>
         <div className="centre-details-layout">
@@ -228,9 +269,28 @@ export default function UserCoolingCentres({
         >
           <ArrowDownUp size={16} />Sort by nearest
         </button>
+        {signedIn && (
+          <button
+            type="button"
+            className={`btn ${favOnly ? 'primary' : 'secondary'}`}
+            aria-pressed={favOnly}
+            onClick={() => setFavOnly(value => !value)}
+          >
+            <Heart size={16} fill={favOnly ? 'currentColor' : 'none'} />Saved ({favIds.length})
+          </button>
+        )}
         <small>{filteredCentres.length} locations</small>
       </div>
       {locationError && <div className="notice" role="alert">{locationError}</div>}
+      {needSignIn && !signedIn && (
+        <div className="centre-signin-hint" role="status">
+          <span>Sign in to save places and find them again easily.</span>
+          <div>
+            <button type="button" className="btn primary small" onClick={() => onSignIn?.()}>Sign in</button>
+            <button type="button" className="btn secondary small" onClick={() => setNeedSignIn(false)}>Not now</button>
+          </div>
+        </div>
+      )}
       <CoolingCentresDirectoryMap
         centres={filteredCentres}
         location={userCoords}
@@ -239,12 +299,21 @@ export default function UserCoolingCentres({
       />
       <div className="centre-tiles">
         {filteredCentres.map(centre => (
-          <CentreTile key={centre.id} centre={centre} distance={centre.distance} onOpen={openCentre} />
+          <CentreTile
+            key={centre.id}
+            centre={centre}
+            distance={centre.distance}
+            onOpen={openCentre}
+            saved={isSaved(centre)}
+            onToggleSaved={toggleSaved}
+          />
         ))}
       </div>
-      {!filteredCentres.length && (
+      {!filteredCentres.length && (favOnly ? (
+        <Empty title="No saved places" text="Tap the heart on a cooling centre to save it, or turn off the Saved filter." />
+      ) : (
         <Empty title="No cooling centres listed" text="No verified cooling-centre locations have been published. Check official local guidance for current assistance." />
-      )}
+      ))}
     </div>
   );
 }

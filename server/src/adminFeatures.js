@@ -1,3 +1,4 @@
+import {notifyAlertSubscribers} from './accountFeatures.js';
 import {walkingDirections} from './centreLocation.js';
 import {savedPhotos} from './centrePhotos.js';
 // HeatSafe KL — Admin submodules:
@@ -228,6 +229,7 @@ export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file})
       [p.title, p.description, p.severity, p.area, p.starts, p.ends, publish ? 'published' : 'draft', q.session.user.id]);
     const a = r.rows[0];
     await logActivity(q, {action: publish ? 'Published heat alert' : 'Created heat alert draft', module: 'Alert Management', recordType: 'heat_alert', recordId: a.id, summary: `${publish ? 'Published' : 'Created draft of'} ${a.severity} alert "${a.title}" for ${a.affected_area}`});
+    if (publish) notifyAlertSubscribers(a); // emails opted-in users; not awaited
     s.status(201).json({...a, state: alertState(a)});
   }));
 
@@ -254,6 +256,7 @@ export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file})
     const r = await pool.query("UPDATE heat_alerts SET status=$1::varchar,published_at=CASE WHEN $1::varchar='published' THEN NOW() ELSE published_at END,updated_at=NOW() WHERE id=$2 RETURNING *", [st, q.params.id]);
     const a = r.rows[0];
     await logActivity(q, {action: st === 'published' ? 'Published heat alert' : st === 'deactivated' ? 'Deactivated heat alert' : 'Moved heat alert to draft', module: 'Alert Management', recordType: 'heat_alert', recordId: a.id, summary: `${st === 'published' ? 'Published' : st === 'deactivated' ? 'Deactivated' : 'Moved to draft:'} alert "${a.title}"`, details: {changes: {Status: {from: before.rows[0].status, to: st}}}});
+    if (st === 'published' && before.rows[0].status !== 'published') notifyAlertSubscribers(a); // not awaited
     s.json({...a, state: alertState(a)});
   }));
 

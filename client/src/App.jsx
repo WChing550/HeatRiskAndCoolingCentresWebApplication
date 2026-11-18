@@ -65,7 +65,8 @@ function App() {
     [weatherScope, WS] = useState('city'),
     [weatherLoading, WL] = useState(false),
     [centresLoaded, CL] = useState(false),
-    [locating, setLocating] = useState(false);
+    [locating, setLocating] = useState(false),
+    [favIds, setFavIds] = useState([]);
 
   const weatherRequests = useRef({ city: 0, location: 0 });
   const pendingWeather = useRef(0);
@@ -231,6 +232,30 @@ function App() {
     );
   }
 
+  // Saved (favourite) cooling centres for signed-in community members
+  useEffect(() => {
+    if (!user || user.role === 'admin') {
+      setFavIds([]);
+      return;
+    }
+    api('/favourites').then(d => setFavIds(d.ids || [])).catch(() => { });
+  }, [user?.id]);
+
+  async function toggleFavourite(centreId) {
+    const id = String(centreId);
+    const had = favIds.includes(id);
+
+    setFavIds(prev => (had ? prev.filter(x => x !== id) : [...prev, id]));
+
+    try {
+      await api('/favourites/' + id, { method: had ? 'DELETE' : 'POST' });
+    } catch (e) {
+      setFavIds(prev => (had ? [...prev, id] : prev.filter(x => x !== id)));
+      E(e.message);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   async function logout() {
     try {
       await api('/auth/logout', { method: 'POST' });
@@ -314,6 +339,8 @@ function App() {
       : localWeatherError,
     locationError: localWeatherError,
     locating,
+    favIds,
+    toggleFavourite,
     centres,
     reports,
     dash,
@@ -501,6 +528,10 @@ function App() {
               userCoords={userCoords}
               locate={locate}
               locating={locating}
+              favIds={favIds}
+              onToggleFavourite={toggleFavourite}
+              signedIn={!!user}
+              onSignIn={() => AM('login')}
               locationError={localWeatherError}
               centres={centres}
               loaded={centresLoaded}
