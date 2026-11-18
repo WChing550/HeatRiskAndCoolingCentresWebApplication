@@ -122,3 +122,6 @@
   .saved-actions { grid-column: 1 / -1; justify-content: flex-start; }
   .profile-stat { border-left: 0; padding-left: 0; }
 }
+
+.account-initial { overflow: hidden; }
+.account-initial-img { width: 100%; height: 100%; object-fit: cover; display: block; }
