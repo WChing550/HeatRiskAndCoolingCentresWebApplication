@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, BadgeCheck, Clock3, AlertTriangle, CalendarClock, X, ClipboardCheck, ArrowLeft } from 'lucide-react';
 import { api, asset, day, dt, status } from '../../lib/api.js';
+import { ViewportModal } from '../../components/Shared.jsx';
 
 const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in the browser's local time
 const addDays = (ymd, n) => { const d = new Date(ymd + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA'); };
@@ -182,10 +183,9 @@ export default function CentreVerification({ ctx }) {
       </Panel>
 
       {current && (
-        <div className="overlay" onClick={close}>
-          <div className="modal wide" onClick={e => e.stopPropagation()}>
+        <ViewportModal onClose={close} labelledBy="inspection-dialog-title" wide>
             <div className="modalhead">
-              <div><small>RECORD INSPECTION · #{current.id}</small><h2>{current.name}</h2></div>
+              <div><small>RECORD INSPECTION · #{current.id}</small><h2 id="inspection-dialog-title">{current.name}</h2></div>
               <button className="iconbtn" aria-label="Close" onClick={close}><X /></button>
             </div>
             <div className="kv">
@@ -242,8 +242,7 @@ export default function CentreVerification({ ctx }) {
                 ))}
               </div>
             ) : <small className="muted">No inspections have been recorded for this centre yet.</small>}
-          </div>
-        </div>
+        </ViewportModal>
       )}
     </>
   );

@@ -4,7 +4,7 @@ import { asset } from '../lib/api.js';
 
 
 export default function WorkspaceNav({
-  nav, page, go, home, user, isAdmin, dash, open, setOpen, logout, signIn,
+  nav, page, go, home, user, isAdmin, dash, supportSummary, open, setOpen, logout, signIn,
 }) {
   return (
     <header className={'workspace-nav ' + (open ? 'menu-open' : '')}>
@@ -61,13 +61,16 @@ export default function WorkspaceNav({
           const count =
             id === 'reports'
               ? dash?.reports?.pending
-              : id === 'centres' && isAdmin
-                ? dash?.centres?.attention
-                : 0;
+              : id === 'support' && isAdmin
+                ? supportSummary?.new
+                : id === 'centres' && isAdmin
+                  ? dash?.centres?.attention
+                  : 0;
 
           return (
             <button
               key={id}
+              data-page={id}
               className={'workspace-link ' + (active ? 'current' : '')}
               aria-current={active ? 'page' : undefined}
               onClick={() => { go(id); setOpen(false); }}

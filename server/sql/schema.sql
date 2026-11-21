@@ -113,3 +113,46 @@ CREATE TABLE IF NOT EXISTS app_feedback(
   message TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON app_feedback(created_at DESC);
+
+
+-- 8. Admin feedback inbox
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS app_feedback (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  kind VARCHAR(20) NOT NULL CHECK (kind IN ('feedback','problem')),
+  subject VARCHAR(120) NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'new';
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS admin_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS reviewed_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname='app_feedback_status_check' AND conrelid='app_feedback'::regclass
+  ) THEN
+    ALTER TABLE app_feedback ADD CONSTRAINT app_feedback_status_check
+      CHECK (status IN ('new','in_progress','resolved'));
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname='app_feedback_revision_check' AND conrelid='app_feedback'::regclass
+  ) THEN
+    ALTER TABLE app_feedback ADD CONSTRAINT app_feedback_revision_check CHECK (revision > 0);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_feedback_status_kind_created
+  ON app_feedback(status,kind,created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON app_feedback(created_at DESC);
+
+COMMIT;

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload, MapPin, FileText, Eye } from 'lucide-react';
 import { api, asset, dt, status } from '../lib/api.js';
 
@@ -279,5 +280,80 @@ export function PasswordPanel() {
         </button>
       </form>
     </Panel>
+  );
+}
+
+/* Viewport dialog shared by admin pages */
+export function ViewportModal({ children, onClose, labelledBy, wide = false }) {
+  const dialog = useRef(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const root = document.getElementById('root');
+    const previousInert = root?.inert;
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    const previousPadding = body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    window.scrollTo({ top: window.scrollY, left: window.scrollX, behavior: 'instant' });
+    body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${parseFloat(getComputedStyle(body).paddingRight) + scrollbarWidth}px`;
+    }
+    dialog.current.scrollTop = 0;
+    dialog.current.focus({ preventScroll: true });
+    if (root) root.inert = true;
+
+    function handleKey(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close.current();
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...dialog.current.querySelectorAll(
+        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+      )].filter(element => element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first) {
+        event.preventDefault();
+      } else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog.current)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      if (root) root.inert = previousInert;
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPadding;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, []);
+
+  return createPortal(
+    <div
+      className="overlay premium-shell admin-shell viewport-overlay"
+      onClick={event => { if (event.target === event.currentTarget) close.current(); }}
+    >
+      <div
+        ref={dialog}
+        className={`modal viewport-modal${wide ? ' wide' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        tabIndex={-1}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body,
   );
 }

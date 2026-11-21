@@ -2,8 +2,8 @@ import React from 'react';
 import { AlertTriangle, Info } from 'lucide-react';
 import { dt } from '../lib/api.js';
 
-// Shown with every alert so users never mistake an administrator advisory for an official warning.
-export const ALERT_DISCLAIMER = 'Advisory published by HeatSafe KL administrators. This is not an official government emergency warning — always follow instructions from official authorities.';
+// Published alerts include this notice; the admin editor preview omits it.
+export const ALERT_DISCLAIMER = 'Advisory published by HeatSafe KL administrators. This is not an official government emergency warning, always follow instructions from official authorities.';
 
 export function AlertCard({ alert, preview = false, statusLabel = '' }) {
   const Icon = alert.severity === 'High' ? AlertTriangle : Info;
@@ -21,7 +21,7 @@ export function AlertCard({ alert, preview = false, statusLabel = '' }) {
         {alert.ends_at && <span>Until {dt(alert.ends_at)}</span>}
       </div>
       <p>{alert.description || 'Alert description will appear here.'}</p>
-      <small className="alertnote">{ALERT_DISCLAIMER}</small>
+      {!preview && <small className="alertnote">{ALERT_DISCLAIMER}</small>}
     </article>
   );
 }

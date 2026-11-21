@@ -1,147 +1,56 @@
-import React, { useEffect, useMemo } from 'react';
-import { Icon } from 'leaflet';
-import {
-  CircleMarker,
-  MapContainer,
-  Marker,
-  Popup,
-  TileLayer,
-  useMap,
-} from 'react-leaflet';
-import markerUrl from 'leaflet/dist/images/marker-icon.png';
-import markerRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
-import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png';
-import { status } from '../lib/api.js';
+import React from 'react';
+import { CircleMarker, MapContainer, Popup, TileLayer } from 'react-leaflet';
+import { MapPin } from 'lucide-react';
+import { directionsAddress, walkingDirections } from '../lib/directions.js';
+import WalkingDirectionsLink from './WalkingDirectionsLink.jsx';
 
-const KUALA_LUMPUR = [3.139, 101.6869];
-const MAX_NEARBY_KM = 25; // ignore "nearby" if the user is far from every centre
+export default function CentreLocationMap({ centre }) {
+  const link = walkingDirections(centre);
 
-const centreIcon = new Icon({
-  iconUrl: markerUrl,
-  iconRetinaUrl: markerRetinaUrl,
-  shadowUrl: markerShadowUrl,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+  if (!link) {
+    return <p className="muted">A valid centre location has not been provided.</p>;
+  }
 
-function DirectoryMapView({ pins, location, nearbyCount }) {
-  const map = useMap();
-
-  useEffect(() => {
-    // 1. User located and "nearest" is on: show them plus the closest centres
-    if (location && nearbyCount > 0) {
-      const nearest = pins
-        .filter(pin => pin.centre.distance != null && pin.centre.distance <= MAX_NEARBY_KM)
-        .sort((a, b) => a.centre.distance - b.centre.distance)
-        .slice(0, nearbyCount);
-
-      if (nearest.length) {
-        map.fitBounds(
-          [[location.latitude, location.longitude], ...nearest.map(pin => pin.position)],
-          { padding: [40, 40], maxZoom: 15, animate: false },
-        );
-        return;
-      }
-    }
-
-    // 2. User located but nearest sort is off (or no centre nearby): centre on them
-    if (location && nearbyCount === 0) {
-      map.setView([location.latitude, location.longitude], 14, { animate: false });
-      return;
-    }
-
-    // 3. No location: show every centre
-    if (pins.length) {
-      map.fitBounds(pins.map(pin => pin.position), {
-        padding: [30, 30],
-        maxZoom: 14,
-        animate: false,
-      });
-    } else {
-      map.setView(KUALA_LUMPUR, 12, { animate: false });
-    }
-  }, [map, pins, location, nearbyCount]);
-
-  return null;
-}
-
-export default function CoolingCentresDirectoryMap({
-  centres,
-  location,
-  onOpen,
-  nearbyCount = 0,
-}) {
-  const pins = useMemo(
-    () => centres.flatMap(centre => {
-      const lat = Number(centre.latitude);
-      const lon = Number(centre.longitude);
-
-      if (!(lat >= 3 && lat <= 3.3 && lon >= 101.55 && lon <= 101.8)) {
-        return [];
-      }
-
-      return [{ centre, position: [lat, lon] }];
-    }),
-    [centres]
-  );
+  const position = [Number(centre.latitude), Number(centre.longitude)];
+  const name = centre.name || 'Cooling centre';
+  const address = directionsAddress(centre.address, centre.name) || centre.address;
 
   return (
-    <div className="map" role="region" aria-label="Cooling centres map">
-      <MapContainer
-        center={KUALA_LUMPUR}
-        zoom={12}
-        scrollWheelZoom={false}
-        style={{ height: 360, width: '100%' }}
-      >
-        <TileLayer
-          attribution={'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+    <section className="panel centre-location-detail">
+      <header className="panelhead">
+        <div>
+          <h3><MapPin size={18} />Find this cooling centre</h3>
+          <p>{address}</p>
+        </div>
+      </header>
 
-        <DirectoryMapView pins={pins} location={location} nearbyCount={nearbyCount} />
-
-        {pins.map(({ centre, position }) => (
-          <Marker
-            key={centre.id}
-            position={position}
-            icon={centreIcon}
-            title={centre.name}
-            alt={centre.name}
-          >
-            <Popup>
-              <strong>{centre.name}</strong>
-              <br />
-              {centre.address}
-              <br />
-              {status(centre.status)} · {centre.operating_hours || 'Hours not provided'}
-              <br />
-              <button
-                type="button"
-                className="btn secondary small"
-                onClick={() => onOpen(centre)}
-              >
-                View details
-              </button>
-            </Popup>
-          </Marker>
-        ))}
-
-        {location && (
+      <div className="centre-detail-map" role="region" aria-label="Cooling centre location">
+        <MapContainer
+          key={position.join(',')}
+          center={position}
+          zoom={16}
+          scrollWheelZoom={false}
+          style={{ height: 310, width: '100%' }}
+        >
+          <TileLayer
+            attribution={'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
           <CircleMarker
-            center={[location.latitude, location.longitude]}
-            radius={9}
-            pathOptions={{
-              color: '#b44822',
-              fillColor: '#e8752e',
-              fillOpacity: 0.9,
-            }}
+            center={position}
+            radius={10}
+            pathOptions={{ color: '#536e86', fillColor: '#8eabbc', fillOpacity: 0.9 }}
           >
-            <Popup>Your current location</Popup>
+            <Popup><b>{name}</b><br />{centre.address}</Popup>
           </CircleMarker>
-        )}
-      </MapContainer>
-    </div>
+        </MapContainer>
+      </div>
+
+      <WalkingDirectionsLink key={link} link={link} />
+      <p className="directions-note">
+        Starts from your current location and opens a walking route to this cooling
+        centre’s map pin in Google Maps. Allow location access when prompted.
+      </p>
+    </section>
   );
 }
