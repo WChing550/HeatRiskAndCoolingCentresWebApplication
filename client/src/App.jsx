@@ -464,7 +464,7 @@ function App() {
               </small>
 
               <h1>
-                {isAdmin && page === 'overview' ? 'City overview' : title}
+                {isAdmin && page === 'overview' ? 'City Overview' : title}
               </h1>
 
               <p>

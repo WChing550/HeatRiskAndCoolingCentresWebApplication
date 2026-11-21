@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BellRing, Plus, Pencil, Copy, Send, Power, X, CalendarClock, FileText, Radio } from 'lucide-react';
 import { api, dt, status } from '../../lib/api.js';
-import { AlertCard, ALERT_DISCLAIMER } from '../../components/AlertBanner.jsx';
+import { AlertCard } from '../../components/AlertBanner.jsx';
+import { ViewportModal } from '../../components/Shared.jsx';
 
 const pad = n => String(n).padStart(2, '0');
 // <input type="datetime-local"> works in local time without a zone, so convert both ways.
@@ -118,43 +119,40 @@ export default function AlertManagement({ ctx }) {
       </Panel>
 
       {editing && (
-        <div className="overlay" onClick={() => setEditing(null)}>
-          <div className="modal wide" onClick={e => e.stopPropagation()}>
-            <div className="modalhead">
-              <div><small>{editing.id ? `EDIT ALERT · #${editing.id}` : 'NEW HEAT ALERT'}</small><h2>{editing.id ? 'Edit heat alert' : 'Create heat alert'}</h2></div>
-              <button className="iconbtn" aria-label="Close" onClick={() => setEditing(null)}><X /></button>
-            </div>
-            <div className="alertstack">
-              <form className="stack" onSubmit={save} style={{ borderTop: 0, paddingTop: 0, marginTop: 8 }}>
-                <Field label="Alert title *"><input required maxLength={160} value={f.title} onChange={e => setField('title', e.target.value)} placeholder="High heat-risk conditions detected" /></Field>
-                <Field label="Severity">
-                  <select value={f.severity} onChange={e => setField('severity', e.target.value)}>
-                    <option value="Low">Low</option><option value="Moderate">Moderate</option><option value="High">High</option>
-                  </select>
-                </Field>
-                <Field label="Affected area *"><input required maxLength={160} value={f.affectedArea} onChange={e => setField('affectedArea', e.target.value)} /></Field>
-                <Field label="Starts *"><input type="datetime-local" required value={f.startsAt} onChange={e => setField('startsAt', e.target.value)} /></Field>
-                <Field label="Ends *"><input type="datetime-local" required min={f.startsAt} value={f.endsAt} onChange={e => setField('endsAt', e.target.value)} /></Field>
-                <Field label="Description *"><textarea rows="4" required value={f.description} onChange={e => setField('description', e.target.value)} placeholder={SUGGESTION} /></Field>
-                {!editing.id && (
-                  <label className="check">
-                    <input type="checkbox" checked={f.publish} onChange={e => setField('publish', e.target.checked)} />
-                    <span><b>Publish immediately</b><small>Otherwise it is saved as a draft. Published alerts show to every visitor between the start and end time.</small></span>
-                  </label>
-                )}
-                <div className="actions">
-                  <button type="button" className="btn secondary" onClick={() => setEditing(null)}>Cancel</button>
-                  <button className="btn primary" disabled={saving}>{saving ? 'Saving…' : editing.id ? 'Save changes' : f.publish ? 'Publish alert' : 'Save draft'}</button>
-                </div>
-              </form>
-              <div style={{ marginTop: 8 }}>
-                <span className="previewlabel">HEAT ALERT PREVIEW</span>
-                <AlertCard alert={preview} preview />
-                <small className="muted" style={{ display: 'block', marginTop: 10 }}>{ALERT_DISCLAIMER} This notice is added automatically.</small>
+        <ViewportModal onClose={() => setEditing(null)} labelledBy="heat-alert-dialog-title" wide>
+          <div className="modalhead">
+            <div><small>{editing.id ? `EDIT ALERT · #${editing.id}` : 'NEW HEAT ALERT'}</small><h2 id="heat-alert-dialog-title">{editing.id ? 'Edit heat alert' : 'Create heat alert'}</h2></div>
+            <button className="iconbtn" aria-label="Close" onClick={() => setEditing(null)}><X /></button>
+          </div>
+          <div className="alertstack">
+            <form className="stack" onSubmit={save} style={{ borderTop: 0, paddingTop: 0, marginTop: 8 }}>
+              <Field label="Alert title *"><input required maxLength={160} value={f.title} onChange={e => setField('title', e.target.value)} placeholder="High heat-risk conditions detected" /></Field>
+              <Field label="Severity">
+                <select value={f.severity} onChange={e => setField('severity', e.target.value)}>
+                  <option value="Low">Low</option><option value="Moderate">Moderate</option><option value="High">High</option>
+                </select>
+              </Field>
+              <Field label="Affected area *"><input required maxLength={160} value={f.affectedArea} onChange={e => setField('affectedArea', e.target.value)} /></Field>
+              <Field label="Starts *"><input type="datetime-local" required value={f.startsAt} onChange={e => setField('startsAt', e.target.value)} /></Field>
+              <Field label="Ends *"><input type="datetime-local" required min={f.startsAt} value={f.endsAt} onChange={e => setField('endsAt', e.target.value)} /></Field>
+              <Field label="Description *"><textarea rows="4" required value={f.description} onChange={e => setField('description', e.target.value)} placeholder={SUGGESTION} /></Field>
+              {!editing.id && (
+                <label className="check">
+                  <input type="checkbox" checked={f.publish} onChange={e => setField('publish', e.target.checked)} />
+                  <span><b>Publish immediately</b><small>Otherwise it is saved as a draft. Published alerts show to every visitor between the start and end time.</small></span>
+                </label>
+              )}
+              <div className="actions">
+                <button type="button" className="btn secondary" onClick={() => setEditing(null)}>Cancel</button>
+                <button className="btn primary" disabled={saving}>{saving ? 'Saving…' : editing.id ? 'Save changes' : f.publish ? 'Publish alert' : 'Save draft'}</button>
               </div>
+            </form>
+            <div style={{ marginTop: 8 }}>
+              <span className="previewlabel">HEAT ALERT PREVIEW</span>
+              <AlertCard alert={preview} preview />
             </div>
           </div>
-        </div>
+        </ViewportModal>
       )}
     </>
   );

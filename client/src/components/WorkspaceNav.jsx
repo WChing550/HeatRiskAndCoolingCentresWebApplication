@@ -70,6 +70,7 @@ export default function WorkspaceNav({
           return (
             <button
               key={id}
+              data-page={id}
               className={'workspace-link ' + (active ? 'current' : '')}
               aria-current={active ? 'page' : undefined}
               onClick={() => { go(id); setOpen(false); }}

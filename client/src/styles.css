@@ -2861,3 +2861,66 @@ html[data-theme="dark"] .feedback-desk .feedback-search > input { background: tr
   .feedback-count:hover,
   .feedback-ticket:hover { transform: none; }
 }
+
+/* Approved User Support and Heat Alerts editor text sizes. */
+@media screen {
+  .admin-shell .feedback-desk { font-size: 14.5px; }
+  .admin-shell .feedback-hero h2 { font-size: clamp(28px, 3vw, 37px); }
+  .admin-shell .feedback-hero p { font-size: 14px; }
+  .admin-shell .feedback-art-note { font-size: 15px; }
+  .admin-shell .feedback-count strong { font-size: 32px; }
+  .admin-shell :is(.feedback-eyebrow, .feedback-live, .feedback-problem-count,
+      .feedback-count > span, .feedback-kind, .feedback-status, .feedback-reference,
+      .feedback-ticket footer, .feedback-sender time, .feedback-review-heading > span,
+      .feedback-note-hint, .feedback-review-actions small) { font-size: 12px; line-height: 1.6; }
+  .admin-shell .feedback-desk .feedback-search > input { font-size: 13px; line-height: 1.5; }
+  .admin-shell .feedback-desk .feedback-search > input::placeholder { font-size: inherit; }
+  .admin-shell .feedback-toolbar > select,
+  .admin-shell .feedback-refresh { font-size: 14px; }
+  .admin-shell .feedback-list-heading h3 { font-size: 20px; }
+  .admin-shell .feedback-list-heading span { font-size: 13px; }
+  .admin-shell .feedback-list-order { max-width: 130px; }
+  .admin-shell .feedback-ticket h4 { font-size: 16px; line-height: 1.5; }
+  .admin-shell .feedback-ticket p { font-size: 14px; line-height: 1.7; }
+  .admin-shell .feedback-pagination { font-size: 13px; }
+  .admin-shell .feedback-detail-heading h3 { font-size: 25px; line-height: 1.4; }
+  .admin-shell .feedback-sender b { font-size: 14px; }
+  .admin-shell .feedback-sender div > span { font-size: 13px; }
+  .admin-shell .feedback-message-body { font-size: 15px; line-height: 1.85; }
+  .admin-shell .feedback-review-heading h4 { font-size: 17px; }
+  .admin-shell .feedback-progress > span { font-size: 12px; }
+  .admin-shell .feedback-progress i {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; padding: 0; font-size: 11px; line-height: 1;
+  }
+  .admin-shell .feedback-review-form .field > span { font-size: 14px; line-height: 1.5; }
+  .admin-shell .feedback-desk .feedback-review-form :is(select, textarea) { font-size: 15px; line-height: 1.6; }
+  .admin-shell .feedback-review-actions .btn { font-size: 14px; }
+  .admin-shell :is(.feedback-empty h4, .feedback-detail-empty h3) { font-size: 19px; }
+  .admin-shell :is(.feedback-empty p, .feedback-detail-empty p, .feedback-error, .feedback-success) { font-size: 14px; }
+  .admin-shell .workspace-link[data-page="support"] > b {
+      display: inline-flex; align-items: center; justify-content: center;
+      box-sizing: border-box; min-width: 18px; height: 18px;
+      padding: 0 4px; flex: 0 0 auto; border-radius: 999px;
+      font: 600 10px/1 'DM Sans', sans-serif;
+      letter-spacing: 0; text-align: center;
+  }
+  .admin-shell .modal:has(.alertstack) { font-size: 14px; line-height: 1.5; }
+  .admin-shell .modal:has(.alertstack) .modalhead h2 { font-size: 25px; font-family: Manrope, sans-serif; }
+  .admin-shell .modal:has(.alertstack) :is(.modalhead small, .previewlabel, .pill, .alertmeta, .alertmeta span, .check small) {
+      font-size: 12px; line-height: 1.6;
+  }
+  .admin-shell .modal:has(.alertstack) .field > span { font-size: 14px; line-height: 1.5; }
+  .admin-shell .modal:has(.alertstack) :is(input, select, textarea) { font-size: 15px; line-height: 1.5; }
+  .admin-shell .modal:has(.alertstack) input:not([type="checkbox"]),
+  .admin-shell .modal:has(.alertstack) select { min-height: 43px; }
+  .admin-shell .modal:has(.alertstack) .check input { flex-shrink: 0; }
+  .admin-shell .modal:has(.alertstack) :is(.btn, .check b) { font-size: 14px; }
+  .admin-shell .modal:has(.alertstack) .alertcard h4 { font-size: 18px; line-height: 1.4; font-family: Manrope, sans-serif; }
+  .admin-shell .modal:has(.alertstack) .alertcard p { font-size: 15px; line-height: 1.7; }
+  @media (max-width: 600px) {
+      .admin-shell .feedback-hero h2 { font-size: 30px; }
+      .admin-shell .feedback-progress > span { flex-wrap: wrap; }
+      .admin-shell .feedback-list-order { max-width: 110px; }
+  }
+}
