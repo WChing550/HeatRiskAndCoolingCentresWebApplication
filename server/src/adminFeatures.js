@@ -101,6 +101,7 @@ const SUMMARY_SQL = where => `SELECT COUNT(*)::int AS readings,
   FROM heat_risk_logs WHERE ${where}`;
 
 export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file}) {
+  registerFeedbackFeatures(app, {auth, admin, ar, str, pool, logActivity});
   /* ================= 1. USER MANAGEMENT ================= */
   app.get('/api/admin/users', auth, admin, ar(async (_q, s) => {
     const r = await pool.query(`SELECT u.id,u.full_name,u.email,u.username,u.role,u.account_status,u.created_at,u.updated_at,
@@ -310,5 +311,109 @@ export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file})
       current: cur.rows[0], previous: prev.rows[0], daily: daily.rows, hourly: hourRows, peakHour,
       peakReadings: peak.rows, locations: loc.rows.map(l => ({...l, risk_level: riskLevel(l.avg_hi)})), reports: rep.rows[0]
     });
+  }));
+}
+
+/* User Support: app feedback and problems */
+const FEEDBACK_STATUSES = ['new', 'in_progress', 'resolved'];
+const FEEDBACK_KINDS = ['feedback', 'problem'];
+const FEEDBACK_ROW_FIELDS = `f.*, u.full_name AS sender_name, u.username AS sender_username,
+  u.email AS sender_email, reviewer.full_name AS reviewer_name`;
+const FEEDBACK_JOINS = `LEFT JOIN users u ON u.id=f.user_id
+  LEFT JOIN users reviewer ON reviewer.id=f.reviewed_by`;
+const FEEDBACK_SUMMARY_SQL = `SELECT COUNT(*)::int AS total,
+  COUNT(*) FILTER (WHERE status='new')::int AS new,
+  COUNT(*) FILTER (WHERE status='in_progress')::int AS in_progress,
+  COUNT(*) FILTER (WHERE status='resolved')::int AS resolved,
+  COUNT(*) FILTER (WHERE kind='problem' AND status<>'resolved')::int AS open_problems
+  FROM app_feedback`;
+
+export function registerFeedbackFeatures(app, { auth, admin, ar, str, pool, logActivity }) {
+  app.get('/api/admin/feedback/summary', auth, admin, ar(async (_req, res) => {
+    const result = await pool.query(FEEDBACK_SUMMARY_SQL);
+    res.json(result.rows[0]);
+  }));
+
+  app.get('/api/admin/feedback', auth, admin, ar(async (req, res) => {
+    const status = str(req.query.status) || 'all';
+    const kind = str(req.query.kind) || 'all';
+    const search = str(req.query.search);
+    const pageText = req.query.page ?? '1';
+    const sizeText = req.query.pageSize ?? '12';
+    if (!['all', ...FEEDBACK_STATUSES].includes(status) || !['all', ...FEEDBACK_KINDS].includes(kind)) {
+      return res.status(400).json({ error: 'Choose a valid message type and status.' });
+    }
+    if (search.length > 160 || !/^\d{1,6}$/.test(String(pageText)) || !/^\d{1,2}$/.test(String(sizeText))) {
+      return res.status(400).json({ error: 'Invalid search or page.' });
+    }
+    const page = Number(pageText);
+    const pageSize = Number(sizeText);
+    if (page < 1 || pageSize < 1 || pageSize > 50) {
+      return res.status(400).json({ error: 'Invalid page or page size.' });
+    }
+    const values = [];
+    const clauses = [];
+    if (status !== 'all') {
+      values.push(status);
+      clauses.push(`f.status=$${values.length}`);
+    }
+    if (kind !== 'all') {
+      values.push(kind);
+      clauses.push(`f.kind=$${values.length}`);
+    }
+    if (search) {
+      values.push(search);
+      clauses.push(`strpos(lower(concat_ws(' ',f.subject,f.message,u.full_name,u.username,u.email)),lower($${values.length}))>0`);
+    }
+    const where = clauses.length ? 'WHERE ' + clauses.join(' AND ') : '';
+    const count = await pool.query(`SELECT COUNT(*)::int AS total FROM app_feedback f ${FEEDBACK_JOINS} ${where}`, values);
+    const total = count.rows[0].total;
+    const effectivePage = Math.min(page, Math.max(1, Math.ceil(total / pageSize)));
+    const [rows, summary] = await Promise.all([
+      pool.query(`SELECT ${FEEDBACK_ROW_FIELDS} FROM app_feedback f ${FEEDBACK_JOINS} ${where}
+        ORDER BY CASE f.status WHEN 'new' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
+          CASE WHEN f.kind='problem' THEN 0 ELSE 1 END, f.created_at DESC, f.id DESC
+        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      [...values, pageSize, (effectivePage - 1) * pageSize]),
+      pool.query(FEEDBACK_SUMMARY_SQL),
+    ]);
+    res.json({ rows: rows.rows, total, page: effectivePage, pageSize, summary: summary.rows[0] });
+  }));
+
+  app.patch('/api/admin/feedback/:id', auth, admin, ar(async (req, res) => {
+    if (!/^\d{1,18}$/.test(String(req.params.id))) {
+      return res.status(404).json({ error: 'Message not found.' });
+    }
+    const status = str(req.body.status);
+    if (!FEEDBACK_STATUSES.includes(status) || typeof req.body.adminNote !== 'string') {
+      return res.status(400).json({ error: 'Choose a valid status and enter a text note.' });
+    }
+    const note = req.body.adminNote.trim();
+    const revision = req.body.revision;
+    if (note.length > 2000 || !Number.isSafeInteger(revision) || revision < 1 || revision > 2147483646) {
+      return res.status(400).json({ error: 'The note must be at most 2000 characters and the message version must be valid.' });
+    }
+    const result = await pool.query(`WITH changed AS (
+      UPDATE app_feedback SET status=$1, admin_note=$2, reviewed_by=$3,
+        reviewed_at=NOW(), updated_at=NOW(), revision=revision+1
+      WHERE id=$4 AND revision=$5 RETURNING *
+    ) SELECT ${FEEDBACK_ROW_FIELDS} FROM changed f ${FEEDBACK_JOINS}`,
+    [status, note, req.session.user.id, req.params.id, revision]);
+    if (!result.rowCount) {
+      const exists = await pool.query('SELECT 1 FROM app_feedback WHERE id=$1', [req.params.id]);
+      return res.status(exists.rowCount ? 409 : 404).json({
+        error: exists.rowCount
+          ? 'Another administrator updated this message. Reload it before saving your changes.'
+          : 'Message not found.',
+      });
+    }
+    const entry = result.rows[0];
+    await logActivity(req, {
+      action: 'Updated app feedback', module: 'User Support',
+      recordType: 'app_feedback', recordId: entry.id,
+      summary: `Reviewed ${entry.kind}: ${entry.subject} (${entry.status.replace('_', ' ')})`,
+      details: { status: entry.status, noteRecorded: Boolean(note) },
+    });
+    res.json({ entry });
   }));
 }
