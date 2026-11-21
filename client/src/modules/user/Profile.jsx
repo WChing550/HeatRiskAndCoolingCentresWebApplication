@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Camera, User, Heart, Bell, ShieldCheck, LifeBuoy, MapPin } from 'lucide-react';
+import { Camera, User, Heart, Bell, ShieldCheck, LifeBuoy, MapPin, ScrollText } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { centrePhotos } from '../../lib/centrePhotos.js';
 import { isPublishedCentre } from '../../lib/centreVisibility.js';
+import ActivityLog from '../admin/ActivityLog.jsx';
 
 const MAX_AVATAR_MB = 2;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -16,8 +17,8 @@ const USER_TABS = [
 ];
 const ADMIN_TABS = [
   ['account', 'Account', User],
-  ['notifications', 'Notifications', Bell],
   ['security', 'Security', ShieldCheck],
+  ['activity', 'Activity Log', ScrollText],
 ];
 
 const FAQ = [
@@ -354,6 +355,11 @@ export default function Profile({ ctx }) {
   const [avatarPreview, setAvatarPreview] = useState('');
 
   useEffect(() => {
+    const availableTabs = isAdmin ? ADMIN_TABS : USER_TABS;
+    if (!availableTabs.some(([id]) => id === tab)) setTab('account');
+  }, [isAdmin, tab]);
+
+  useEffect(() => {
     if (!avatarFile) { setAvatarPreview(''); return; }
     const url = URL.createObjectURL(avatarFile);
     setAvatarPreview(url);
@@ -414,9 +420,14 @@ export default function Profile({ ctx }) {
         <AccountTab ctx={ctx} avatarSrc={avatarSrc} avatarFile={avatarFile} setAvatarPreviewFile={setAvatarFile} />
       )}
       {tab === 'saved' && !isAdmin && <SavedTab ctx={ctx} saved={saved} />}
-      {tab === 'notifications' && <NotificationsTab ctx={ctx} />}
+      {tab === 'notifications' && !isAdmin && <NotificationsTab ctx={ctx} />}
       {tab === 'help' && !isAdmin && <HelpTab />}
       {tab === 'security' && <PasswordPanel />}
+      {tab === 'activity' && isAdmin && (
+        <div className="profile-activity" role="tabpanel" aria-label="Activity Log">
+          <ActivityLog ctx={ctx} />
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { AlertTriangle, Info } from 'lucide-react';
 import { dt } from '../lib/api.js';
 
 // Shown with every alert so users never mistake an administrator advisory for an official warning.
-export const ALERT_DISCLAIMER = 'Advisory published by HeatSafe KL administrators. This is not an official government emergency warning — always follow instructions from official authorities.';
+export const ALERT_DISCLAIMER = 'Advisory published by HeatSafe KL administrators. This is not an official government emergency warning, always follow instructions from official authorities.';
 
 export function AlertCard({ alert, preview = false, statusLabel = '' }) {
   const Icon = alert.severity === 'High' ? AlertTriangle : Info;
