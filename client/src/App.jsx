@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './lib/chartSetup.js';
 import 'leaflet/dist/leaflet.css';
 import { api, asset, dt, status } from './lib/api.js';
@@ -6,7 +6,7 @@ import Auth from './pages/auth/Auth.jsx';
 import Landing from './pages/Landing.jsx';
 import WorkspaceNav from './components/WorkspaceNav.jsx';
 import AdminOverview from './modules/admin/AdminOverview.jsx';
-import { Sun, Activity, MapPin, ThermometerSun, Users, ClipboardList, Building2, LogOut, Menu, X, Plus, Search, CheckCircle2, XCircle, Clock3, FileText, Eye, RefreshCw, LayoutDashboard, UserRound, HeartPulse, LocateFixed, ShieldCheck, BellRing, ScrollText } from 'lucide-react';
+import { Sun, Activity, MapPin, ThermometerSun, Users, ClipboardList, Building2, LogOut, Menu, X, Plus, Search, CheckCircle2, XCircle, Clock3, FileText, Eye, RefreshCw, LayoutDashboard, UserRound, HeartPulse, LocateFixed, ShieldCheck, BellRing, LifeBuoy, ArrowUpRight, Check, CheckCheck, ChevronLeft, ChevronRight, Inbox, Lightbulb, MessageSquare, Wrench } from 'lucide-react';
 import { Field, Photo, Metric, Panel, Empty, ReportTable, ReportCard, PasswordPanel } from './components/Shared.jsx';
 import AdminCoolingCentres from './modules/admin/CoolingCentres.jsx';
 import UserCoolingCentres from './modules/user/CoolingCentres.jsx';
@@ -20,7 +20,6 @@ import Profile from './modules/user/Profile.jsx';
 import UserManagement from './modules/admin/UserManagement.jsx';
 import CentreVerification from './modules/admin/CentreVerification.jsx';
 import AlertManagement from './modules/admin/AlertManagement.jsx';
-import ActivityLog from './modules/admin/ActivityLog.jsx';
 import AlertBanner from './components/AlertBanner.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
 
@@ -72,6 +71,29 @@ function App() {
   const pendingWeather = useRef(0);
   const refreshRequest = useRef(0);
   const isAdmin = user?.role === 'admin';
+  const [supportSummary, setSupportSummary] = useState(null);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setSupportSummary(null);
+      return;
+    }
+    let active = true;
+    const load = () => {
+      if (document.hidden) return;
+      api('/admin/feedback/summary')
+        .then(summary => { if (active) setSupportSummary(summary); })
+        .catch(() => { if (active) setSupportSummary(null); });
+    };
+    load();
+    const interval = setInterval(load, 30000);
+    document.addEventListener('visibilitychange', load);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', load);
+    };
+  }, [isAdmin, user?.id]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -301,7 +323,7 @@ function App() {
       ['alerts', 'Heat Alerts', BellRing],
       ['users', 'User Management', Users],
       ['trends', 'Analytics', Activity],
-      ['activity', 'Activity Log', ScrollText],
+      ['support', 'User Support', LifeBuoy],
       ['profile', 'My Profile', UserRound],
     ]
     : [
@@ -344,6 +366,8 @@ function App() {
     centres,
     reports,
     dash,
+    supportSummary,
+    setSupportSummary,
     history,
     stats,
     busy,
@@ -424,6 +448,7 @@ function App() {
         user={user}
         isAdmin={isAdmin}
         dash={dash}
+        supportSummary={supportSummary}
         open={navOpen}
         setOpen={NO}
         logout={logout}
@@ -457,14 +482,14 @@ function App() {
                             ? 'Create and publish heat advisories for users.'
                             : page === 'users'
                               ? 'Manage accounts and review each user\'s report history.'
-                              : page === 'activity'
-                                ? 'A traceable record of administrator actions.'
+                              : page === 'support'
+                                ? 'Listen to feedback, investigate app problems and keep every request moving forward.'
                                 : page === 'trends'
                                   ? (isAdmin
                                     ? 'Analyse heat readings over time, compare periods and export reports.'
                                     : 'Understand recent heat patterns and reporting activity.')
                                   : page === 'profile'
-                                    ? 'Manage account details and security.'
+                                    ? (isAdmin ? 'Manage your account, security and administrator activity.' : 'Manage account details and security.')
                                     : 'Manage reports and facility details.'}
               </p>
             </div>
@@ -544,7 +569,7 @@ function App() {
           {page === 'verification' && isAdmin && <CentreVerification ctx={ctx} />}
           {page === 'alerts' && isAdmin && <AlertManagement ctx={ctx} />}
           {page === 'users' && isAdmin && <UserManagement ctx={ctx} />}
-          {page === 'activity' && isAdmin && <ActivityLog ctx={ctx} />}
+          {page === 'support' && isAdmin && <UserSupport ctx={ctx} />}
           {page === 'trends' && <Analytics ctx={ctx} />}
           {page === 'profile' && user && <Profile ctx={ctx} />}
 
@@ -558,3 +583,191 @@ function App() {
 }
 
 export default App;
+
+/* User Support page */
+const SUPPORT_STATUS_LABELS = { new: 'New', in_progress: 'In progress', resolved: 'Resolved' };
+const EMPTY_SUPPORT_SUMMARY = { total: 0, new: 0, in_progress: 0, resolved: 0, open_problems: 0 };
+const supportReviewForm = entry => ({ status: entry.status, adminNote: entry.admin_note || '', revision: entry.revision });
+
+function UserSupport({ ctx }) {
+  const onSummary = ctx.setSupportSummary;
+  const [data, setData] = useState({ rows: [], total: 0, page: 1, pageSize: 12, summary: EMPTY_SUPPORT_SUMMARY });
+  const [status, setStatus] = useState('all');
+  const [kind, setKind] = useState('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState(null);
+  const [form, setForm] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [success, setSuccess] = useState('');
+  const selection = useRef(null);
+  const request = useRef(0);
+  const detail = useRef(null);
+
+  const choose = useCallback(entry => {
+    selection.current = entry ? String(entry.id) : null;
+    setSelectedId(selection.current);
+    setForm(entry ? supportReviewForm(entry) : null);
+    setSaveError('');
+  }, []);
+
+  const load = useCallback(async ({ quiet = false, resetSelection = false } = {}) => {
+    const id = ++request.current;
+    if (!quiet) setLoading(true);
+    try {
+      const query = new URLSearchParams({ status, kind, search: search.trim(), page: String(page) });
+      const result = await api('/admin/feedback?' + query);
+      if (id !== request.current) return;
+      setData(result);
+      setError('');
+      onSummary(result.summary);
+      const current = result.rows.find(entry => String(entry.id) === selection.current);
+      if (!current || resetSelection) choose(current || result.rows[0] || null);
+      if (result.page !== page) setPage(result.page);
+    } catch (failure) {
+      if (id === request.current) setError(failure.message || 'Could not load messages.');
+    } finally {
+      if (id === request.current) setLoading(false);
+    }
+  }, [status, kind, search, page, onSummary, choose]);
+
+  useEffect(() => {
+    const delay = setTimeout(() => load(), 200);
+    const interval = setInterval(() => {
+      if (!document.hidden) load({ quiet: true });
+    }, 30000);
+    return () => {
+      clearTimeout(delay);
+      clearInterval(interval);
+      request.current++;
+    };
+  }, [load]);
+
+  const selected = data.rows.find(entry => String(entry.id) === selectedId);
+  const summary = data.summary;
+  const changed = selected && form && (form.status !== selected.status || form.adminNote !== (selected.admin_note || ''));
+  const activeFilters = status !== 'all' || kind !== 'all' || search.trim();
+
+  async function save(event) {
+    event.preventDefault();
+    if (!selected || !form || saving) return;
+    setSaving(true);
+    setSaveError('');
+    setSuccess('');
+    try {
+      const result = await api('/admin/feedback/' + selected.id, {
+        method: 'PATCH', body: JSON.stringify(form),
+      });
+      setData(previous => ({ ...previous, rows: previous.rows.map(entry =>
+        String(entry.id) === String(result.entry.id) ? result.entry : entry,
+      ) }));
+      choose(result.entry);
+      setSuccess(`Review saved for “${result.entry.subject}”.`);
+      await load({ quiet: true });
+    } catch (failure) {
+      setSaveError(failure.message || 'Could not save this review.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function filter(setter, value) {
+    setter(value);
+    setPage(1);
+    setSuccess('');
+  }
+
+  return (
+    <section className="feedback-desk" aria-label="Feedback and problems inbox">
+      <div className="feedback-hero">
+        <div className="feedback-hero-copy">
+          <span className="feedback-eyebrow"><span /> COMMUNITY DESK</span>
+          <h2>A closer listen.<br /><em>A better HeatSafe.</em></h2>
+          <p>Ideas worth hearing. Problems worth fixing.<br />Keep every community message moving forward.</p>
+          <span className="feedback-live"><span /> Checks for new messages every 30 seconds</span>
+        </div>
+        <div className="feedback-hero-art" aria-hidden="true">
+          <span className="feedback-art-orbit" />
+          <div className="feedback-art-note"><MessageSquare size={28} /><span>Every voice<br /><b>has a place.</b></span></div>
+          <span className="feedback-art-idea"><Lightbulb size={23} /></span>
+          <span className="feedback-art-check"><Check size={20} /></span>
+          <ArrowUpRight className="feedback-art-arrow" size={29} />
+        </div>
+        <div className="feedback-counts">
+          {[
+            ['new', 'New messages', Inbox],
+            ['in_progress', 'In progress', Clock3],
+            ['resolved', 'Resolved', CheckCheck],
+          ].map(([key, label, Icon]) => (
+            <button type="button" key={key} className={'feedback-count ' + key + (status === key ? ' selected' : '')}
+              aria-pressed={status === key} onClick={() => filter(setStatus, status === key ? 'all' : key)} disabled={saving}>
+              <Icon size={18} /><strong>{summary[key]}</strong><span>{label}</span>
+            </button>
+          ))}
+          <span className="feedback-problem-count"><Wrench size={14} /> {summary.open_problems} open problem{summary.open_problems === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+
+      {success && <div className="feedback-success" role="status"><CheckCheck size={17} />{success}</div>}
+      {error && <div className="feedback-error" role="alert">{error}<button type="button" onClick={() => load()}>Try again</button></div>}
+
+      <div className="feedback-toolbar">
+        <label className="feedback-search"><Search size={17} /><input aria-label="Search feedback and problems" maxLength={160}
+          placeholder="Search message, name or email…" value={search} onChange={event => filter(setSearch, event.target.value)} disabled={saving} /></label>
+        <select aria-label="Message type" value={kind} onChange={event => filter(setKind, event.target.value)} disabled={saving}>
+          <option value="all">All messages</option><option value="problem">Problems</option><option value="feedback">Feedback</option>
+        </select>
+        <select aria-label="Message status" value={status} onChange={event => filter(setStatus, event.target.value)} disabled={saving}>
+          <option value="all">All statuses</option><option value="new">New</option><option value="in_progress">In progress</option><option value="resolved">Resolved</option>
+        </select>
+        <button className="feedback-refresh" type="button" onClick={() => load()} disabled={loading || saving}><RefreshCw size={16} /> Refresh</button>
+      </div>
+
+      <div className="feedback-workspace" aria-busy={loading}>
+        <section className="feedback-list-panel" aria-label="Message list">
+          <header className="feedback-list-heading"><div><h3>The inbox</h3><span>{loading ? 'Loading messages…' : `${data.total} message${data.total === 1 ? '' : 's'}`}</span></div><span className="feedback-list-order">New problems first</span></header>
+          <div className="feedback-message-list">
+            {data.rows.map(entry => {
+              const Icon = entry.kind === 'problem' ? Wrench : MessageSquare;
+              return <button key={entry.id} type="button" disabled={saving}
+                className={'feedback-ticket ' + entry.kind + (String(entry.id) === selectedId ? ' selected' : '')}
+                aria-pressed={String(entry.id) === selectedId} onClick={() => {
+                  choose(entry);
+                  if (matchMedia('(max-width: 860px)').matches) detail.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+                }}>
+                <div className="feedback-ticket-top"><span className="feedback-kind"><Icon size={13} />{entry.kind === 'problem' ? 'Problem' : 'Feedback'}</span><span className={'feedback-status ' + entry.status}>{SUPPORT_STATUS_LABELS[entry.status]}</span></div>
+                <h4>{entry.subject}</h4><p>{entry.message}</p>
+                <footer><span>{entry.sender_name || 'Removed account'}</span><time dateTime={entry.created_at}>{dt(entry.created_at)}</time></footer>
+              </button>;
+            })}
+            {!loading && !data.rows.length && <div className="feedback-empty"><Inbox size={35} /><h4>{activeFilters ? 'No matching messages' : 'A little quiet here.'}</h4><p>{activeFilters ? 'Try another search or clear the filters.' : 'Messages sent from Profile → Help & feedback will arrive here.'}</p>
+              {activeFilters && <button type="button" onClick={() => { setStatus('all'); setKind('all'); setSearch(''); setPage(1); }}>Clear filters</button>}
+            </div>}
+          </div>
+          <footer className="feedback-pagination"><button type="button" aria-label="Previous messages" disabled={data.page <= 1 || loading || saving} onClick={() => setPage(data.page - 1)}><ChevronLeft size={17} /></button><span>Page {data.page} of {Math.max(1, Math.ceil(data.total / data.pageSize))}</span><button type="button" aria-label="Next messages" disabled={data.page * data.pageSize >= data.total || loading || saving} onClick={() => setPage(data.page + 1)}><ChevronRight size={17} /></button></footer>
+        </section>
+
+        <section ref={detail} className="feedback-detail" aria-label="Selected message">
+          {selected && form ? <>
+            <header className="feedback-detail-heading"><span className={'feedback-kind ' + selected.kind}>{selected.kind === 'problem' ? <Wrench size={15} /> : <MessageSquare size={15} />}{selected.kind === 'problem' ? 'PROBLEM REPORT' : 'COMMUNITY FEEDBACK'}</span><span className="feedback-reference">HS-{selected.id}</span><h3>{selected.subject}</h3></header>
+            <div className="feedback-sender"><span className="feedback-avatar">{(selected.sender_name || '?').slice(0, 1).toUpperCase()}</span><div><b>{selected.sender_name || 'Removed account'}</b><span>{selected.sender_email || 'Account no longer available'}</span></div><time dateTime={selected.created_at}>{dt(selected.created_at)}</time></div>
+            <div className="feedback-message-body">{selected.message}</div>
+            <form className="feedback-review-form" onSubmit={save}>
+              <div className="feedback-review-heading"><ShieldCheck size={17} /><h4>Admin workspace</h4><span>Private</span></div>
+              <div className="feedback-progress" aria-label={'Current status: ' + SUPPORT_STATUS_LABELS[form.status]}>{Object.entries(SUPPORT_STATUS_LABELS).map(([key, label], index) => <span key={key} className={form.status === key ? 'active' : ''}><i>{index + 1}</i>{label}</span>)}</div>
+              <label className="field"><span>Review status</span><select aria-label="Review status" value={form.status} disabled={saving} onChange={event => { setForm(previous => ({ ...previous, status: event.target.value })); setSaveError(''); }}>
+                {Object.entries(SUPPORT_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select></label>
+              <label className="field"><span>Private admin note</span><textarea rows={4} maxLength={2000} value={form.adminNote} disabled={saving} onChange={event => { setForm(previous => ({ ...previous, adminNote: event.target.value })); setSaveError(''); }} placeholder="What needs attention? Record your investigation, next step or resolution." /><small className="feedback-note-hint">Visible to administrators only. <span>{form.adminNote.length}/2000</span></small></label>
+              {saveError && <div className="feedback-error" role="alert">{saveError}<button type="button" onClick={() => load({ resetSelection: true })} disabled={saving || loading}>Reload message</button></div>}
+              <div className="feedback-review-actions"><small>{selected.reviewed_at ? `Last reviewed by ${selected.reviewer_name || 'a removed administrator'} · ${dt(selected.reviewed_at)}` : 'Not reviewed yet'}</small><button className="btn primary" disabled={saving || !changed}>{saving ? 'Saving…' : <><Check size={16} /> Save changes</>}</button></div>
+            </form>
+          </> : <div className="feedback-detail-empty"><span><MessageSquare size={40} /></span><h3>Make room for a voice.</h3><p>Select a message to read the details<br />and plan the next step.</p></div>}
+        </section>
+      </div>
+    </section>
+  );
+}

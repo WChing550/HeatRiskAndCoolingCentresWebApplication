@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../../lib/api.js';
 import { X, CheckCircle2, XCircle } from 'lucide-react';
+import { ViewportModal } from '../../components/Shared.jsx';
 
 export default function ReportReviewModal({ selected, isAdmin, setSelected, refresh, setError, setSuccess, asset, dt, Field, Photo }) {
   const [rv, setRv] = useState({ status: 'approved', note: '' });
@@ -27,11 +28,10 @@ export default function ReportReviewModal({ selected, isAdmin, setSelected, refr
 
   if (!selected) return null;
   return (
-    <div className="overlay" onClick={() => setSelected(null)}>
-      <div className="modal" onClick={event => event.stopPropagation()}>
+    <ViewportModal onClose={() => setSelected(null)} labelledBy="report-review-dialog-title">
         <div className="modalhead">
-          <div><small>REPORT REVIEW · #{selected.id}</small><h2>{selected.title}</h2></div>
-          <button className="iconbtn" onClick={() => setSelected(null)}><X /></button>
+          <div><small>REPORT REVIEW · #{selected.id}</small><h2 id="report-review-dialog-title">{selected.title}</h2></div>
+          <button className="iconbtn" aria-label="Close report review" onClick={() => setSelected(null)}><X /></button>
         </div>
         <div className="metarow"><span>{selected.reporter_name || 'Your report'}</span><span>⌖ {selected.location_text}</span><span>{dt(selected.created_at)}</span></div>
         <span className="tag">{selected.category}</span><p>{selected.description}</p>
@@ -44,7 +44,6 @@ export default function ReportReviewModal({ selected, isAdmin, setSelected, refr
           <Photo label="Review evidence photo (optional)" file={reviewPhoto} onChange={setReviewPhoto} />
           <div className="actions"><button type="button" className="btn secondary" onClick={() => setSelected(null)}>Cancel</button><button className="btn primary">{rv.status === 'approved' ? <><CheckCircle2 size={16} /> Approve</> : <><XCircle size={16} /> Reject</>}</button></div>
         </form>}
-      </div>
-    </div>
+    </ViewportModal>
   );
 }
