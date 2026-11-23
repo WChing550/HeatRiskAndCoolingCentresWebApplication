@@ -934,11 +934,13 @@
 }
 
 
-/* Reveal the address inside the existing card without resizing it. */
+/* Equal-height cards with a full visiting summary on hover or keyboard focus. */
 .centre-tile--reveal {
-    --centre-address-height: 72px;
-    display: block;
+    position: relative;
+    display: flex;
+    flex-direction: column;
     align-self: start;
+    width: 100%;
 }
 
 .centre-tile--reveal,
@@ -951,7 +953,8 @@
 .centre-tile--reveal .centre-tile-photo {
     position: relative;
     z-index: 0;
-    transition: transform 460ms cubic-bezier(.22, .61, .36, 1);
+    flex: 0 0 auto;
+    width: 100%;
 }
 
 .centre-tile--reveal img,
@@ -964,31 +967,64 @@
 .centre-tile--reveal .centre-tile-caption {
     position: relative;
     z-index: 1;
-    height: auto;
+    box-sizing: border-box;
+    flex: 0 0 82px;
+    height: 82px;
     background: #fffefa;
     border-top: 1px solid #b7c5cf;
-    transition: transform 460ms cubic-bezier(.22, .61, .36, 1);
 }
 
 .centre-tile--reveal h3 {
     box-sizing: border-box;
-    height: auto;
+    height: 42px;
     margin: 0;
     padding: 10px 12px 8px;
     border-top: 0;
     font-size: 16px;
     line-height: 1.4;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     overflow: hidden;
+}
+
+.centre-tile--reveal .centre-tile-reveal {
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 2;
+    inset: auto 0 0;
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: #fffefa;
+    border-top: 1px solid #b7c5cf;
+    box-shadow: 0 -8px 24px #405d7214;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(12px);
+    transition: opacity 180ms ease, transform 260ms ease, visibility 260ms;
+}
+
+.centre-tile--reveal .centre-tile-reveal h3 {
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.centre-tile--reveal .centre-tile-access {
+    box-sizing: border-box;
+    min-height: 39px;
+}
+
+.centre-tile--reveal .centre-access-badge {
+    white-space: nowrap;
 }
 
 .centre-tile--reveal .centre-tile-address {
     box-sizing: border-box;
-    position: absolute;
-    top: 100%;
-    left: 0;
     width: 100%;
     height: auto;
     margin: 0;
@@ -1001,50 +1037,42 @@
     overflow-wrap: anywhere;
     display: flex;
     overflow: visible;
-    opacity: 0;
-    transition: opacity 180ms ease;
     gap: 8px;
-    align-items: center;
+    align-items: flex-start;
     flex-wrap: nowrap;
 }
 
-.centre-tile--reveal:focus-visible .centre-tile-photo,
-.centre-tile--reveal:focus-visible .centre-tile-caption {
-    transform: translateY(calc(-1 * var(--centre-address-height)));
-}
-
-.centre-tile--reveal:focus-visible .centre-tile-address {
+.centre-tile--reveal:hover .centre-tile-reveal,
+.centre-tile--reveal:focus-visible .centre-tile-reveal {
     opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
 }
 
-.centre-tile--reveal:hover .centre-tile-photo,
-    .centre-tile--reveal:hover .centre-tile-caption {
-    transform: translateY(calc(-1 * var(--centre-address-height)));
+.centre-tile--reveal:focus-visible {
+    outline: 3px solid #719587;
+    outline-offset: 4px;
 }
 
-.centre-tile--reveal:hover .centre-tile-address {
-    opacity: 1;
-    transition-delay: 80ms;
-}
-
-.motion-paused .centre-tile--reveal .centre-tile-photo,
-.motion-paused .centre-tile--reveal .centre-tile-caption,
-.motion-paused .centre-tile--reveal .centre-tile-address {
+.motion-paused .centre-tile--reveal .centre-tile-reveal {
     transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .centre-tile--reveal .centre-tile-photo,
-    .centre-tile--reveal .centre-tile-caption,
-    .centre-tile--reveal .centre-tile-address {
+    .centre-tile--reveal .centre-tile-reveal {
         transition: none;
     }
 }
 
-/* Card hover responds directly to :hover, including mouse input on touch-capable devices. */
+html[data-theme="dark"] .centre-tile--reveal .centre-tile-reveal {
+    background: linear-gradient(115deg, #244da2, #6540b2);
+    color: #fff;
+    border-color: #a584e3;
+    box-shadow: 0 -8px 24px #050b1433;
+}
 
-
-/* Compact address details; the reveal distance is measured from this row. */
+/* Keep the address and location icon aligned in the revealed summary. */
 .centre-tile-location-icon {
     display: grid;
     place-items: center;
@@ -1305,4 +1333,153 @@
         background-image: none;
         padding-inline-end: 12px;
     }
+}
+
+/* Purchase information stays visible before a visitor opens a centre. */
+.centre-access-filters {
+    --access-free: #386b59; --access-free-bg: #e5f0e9;
+    --access-buy: #916144; --access-buy-bg: #f7eadd;
+    --access-line: #cbd8d9; --access-panel: #f5f8f5; --access-ink: #405d66;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 20px 22px; margin: 20px 0;
+    border: 1px solid var(--access-line); border-radius: 15px; background: var(--access-panel);
+}
+.centre-access-intro { display: flex; align-items: center; gap: 12px; color: var(--access-ink); }
+.centre-access-intro > span { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border: 1px solid var(--access-line); border-radius: 12px; background: #fffefa; }
+.centre-access-intro h3 { margin: 0 0 4px; font: 700 15px/1.4 Manrope, sans-serif; color: inherit; }
+.centre-access-intro p { margin: 0; font-size: 12px; color: #74868b; }
+.centre-access-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.centre-access-option { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 39px; padding: 9px 12px; border: 1px solid var(--access-line); border-radius: 11px; background: transparent; color: var(--access-ink); font-size: 12px; transition: background .18s, border-color .18s; }
+.centre-access-option > span { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 21px; padding: 0 4px; border-radius: 7px; background: #e5ebea; font-size: 11px; line-height: 1; }
+.centre-access-option.selected { background: #fffefa; border-color: #6c9087; box-shadow: 0 2px 0 #9bb6ac; }
+.centre-access-option.no_purchase.selected { background: var(--access-free-bg); color: var(--access-free); }
+.centre-access-option.purchase_required.selected { background: var(--access-buy-bg); color: var(--access-buy); border-color: #b28a6e; }
+.centre-access-option:hover { border-color: #6c9087; }
+.centre-access-option:focus-visible { outline: 2px solid #719587; outline-offset: 3px; }
+.centre-tile-access { padding: 0 12px 11px; text-align: left; }
+.centre-access-badge { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 5px 8px; border: 1px solid #c9d6d7; border-radius: 7px; background: #edf1f2; color: #637984; font-size: 11px; font-weight: 600; line-height: 1.35; }
+.centre-access-badge svg { flex-shrink: 0; }
+.centre-access-badge.no_purchase { background: #e5f0e9; border-color: #bed2c8; color: #386b59; }
+.centre-access-badge.purchase_required { background: #f7eadd; border-color: #e4cbb5; color: #916144; }
+.centre-map-access { margin: 8px 0; }
+.centre-visit-info { display: flex; align-items: flex-start; gap: 13px; margin: 0 0 23px; padding: 16px; border: 1px solid #cfdbd8; border-radius: 13px; background: #f1f6f2; }
+.centre-visit-info.purchase_required { background: #fbf3eb; border-color: #e4d3c3; }
+.centre-visit-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 38px; border-radius: 11px; background: #e0ebe4; color: #577a6b; }
+.centre-visit-info.purchase_required .centre-visit-icon { background: #f3e3d3; color: #946849; }
+.centre-visit-info > div { min-width: 0; }
+.centre-visit-info small { display: block; margin-bottom: 8px; font-size: 9px; letter-spacing: 1px; color: #788e89; }
+.centre-visit-info p { margin: 10px 0 0; font-size: 12px; line-height: 1.8; color: #627b72; white-space: pre-wrap; overflow-wrap: anywhere; }
+.centre-filter-empty > .btn { display: flex; margin: 14px auto; }
+html[data-theme="dark"] .centre-access-filters { --access-line: #425169; --access-panel: #1b2537; --access-ink: #d4e3ec; --access-free-bg: #203f39; --access-free: #9de2ca; --access-buy-bg: #43332b; --access-buy: #f7c393; }
+html[data-theme="dark"] .centre-access-intro > span,
+html[data-theme="dark"] .centre-access-option.selected { background: #28364d; }
+html[data-theme="dark"] .centre-access-intro p { color: #a7b9cb; }
+html[data-theme="dark"] .centre-access-option > span { background: #35435b; }
+html[data-theme="dark"] .centre-access-option.no_purchase.selected { background: var(--access-free-bg); }
+html[data-theme="dark"] .centre-access-option.purchase_required.selected { background: var(--access-buy-bg); }
+html[data-theme="dark"] .centre-access-badge { background: #2a354a; color: #c2cfdf; border-color: #4b5b75; }
+html[data-theme="dark"] .centre-access-badge.no_purchase { background: #203f39; color: #9de2ca; border-color: #457e6c; }
+html[data-theme="dark"] .centre-access-badge.purchase_required { background: #43332b; color: #f7c393; border-color: #936b4d; }
+html[data-theme="dark"] .centre-visit-info { background: #1d3434; border-color: #3d6864; }
+html[data-theme="dark"] .centre-visit-info.purchase_required { background: #392f30; border-color: #735c51; }
+html[data-theme="dark"] .centre-visit-icon { background: #2b5149; color: #a6dfcc; }
+html[data-theme="dark"] .centre-visit-info.purchase_required .centre-visit-icon { background: #584035; color: #ffd1ac; }
+html[data-theme="dark"] .centre-visit-info small { color: #b6cbc7; }
+html[data-theme="dark"] .centre-visit-info p { color: #d0e1dd; }
+
+/* Keep every verification column inside the available screen width. */
+.admin-shell .verification-register {
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+}
+.admin-shell .verification-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    white-space: normal;
+}
+.verification-col-centre { width: 33%; }
+.verification-col-status { width: 10%; }
+.verification-col-date { width: 13%; }
+.verification-col-reviewer { width: 17%; }
+.verification-col-actions { width: 14%; }
+.admin-shell .verification-table :is(th, td) {
+    padding: 14px 11px;
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.admin-shell .verification-table td { line-height: 1.6; }
+.admin-shell .verification-table td:first-child > b { display: block; }
+.admin-shell .verification-table .subtle { line-height: 1.6; }
+.admin-shell .verification-table .rowactions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 7px;
+}
+.admin-shell .verification-table .rowactions .btn {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 34px;
+    padding: 8px 10px;
+    gap: 6px;
+    white-space: normal;
+    justify-content: center;
+}
+@media (max-width: 1100px) {
+    .admin-shell .verification-register { border: 0; }
+    .admin-shell .verification-table,
+    .admin-shell .verification-table tbody { display: block; width: 100%; }
+    .admin-shell .verification-table colgroup { display: none; }
+    .admin-shell .verification-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .admin-shell .verification-table tbody { display: grid; gap: 12px; }
+    .admin-shell .verification-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        min-width: 0;
+        border: 1px solid var(--line, #cbd6de);
+        border-radius: 12px;
+    }
+    .admin-shell .verification-table td {
+        display: block;
+        min-width: 0;
+        padding: 12px;
+        border: 0;
+        border-top: 1px solid var(--line, #cbd6de);
+    }
+    .admin-shell .verification-table td:first-child {
+        grid-column: 1 / -1;
+        border-top: 0;
+    }
+    .admin-shell .verification-table td:last-child { grid-column: 1 / -1; }
+    .admin-shell .verification-table td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 5px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: .5px;
+        text-transform: uppercase;
+        color: var(--muted, #7d8e9b);
+    }
+    .admin-shell .verification-table td:first-child::before { display: none; }
+    .admin-shell .verification-table .rowactions .btn { flex: 1 1 0; }
+}
+
+@media (max-width: 600px) {
+    .centre-access-filters { padding: 17px 14px; gap: 16px; }
+    .centre-access-options { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .centre-access-option { min-width: 0; padding: 9px 7px; font-size: 11px; }
+    .centre-access-intro h3 { font-size: 14px; }
+    .centre-access-badge { font-size: 10px; }
 }

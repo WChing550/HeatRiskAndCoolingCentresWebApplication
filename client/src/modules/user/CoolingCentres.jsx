@@ -1,11 +1,11 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Search, LocateFixed, ArrowDownUp, ArrowLeft, Heart, MapPin, Clock3, Phone, Wrench, CheckCircle2 } from 'lucide-react';
 import CentreLocationMap from '../../components/CentreLocationMap.jsx';
 import CoolingCentresDirectoryMap from '../../components/CoolingCentresDirectoryMap.jsx';
 import CentreGallery from '../../components/CentreGallery.jsx';
 import { centrePhotos } from '../../lib/centrePhotos.js';
 import { isPublishedCentre } from '../../lib/centreVisibility.js';
-import { Empty } from '../../components/Shared.jsx';
+import { Empty, CENTRE_ACCESS, CentreAccessBadge, CentreAccessFilters, CentreVisitInfo, centreAccessPolicy } from '../../components/Shared.jsx';
 import { asset, status } from '../../lib/api.js';
 
 // Haversine formula to calculate straight-line distance in kilometers
@@ -36,39 +36,16 @@ function DetailRow({ icon: Icon, label, children }) {
 }
 
 function CentreTile({ centre, onOpen, distance, saved, onToggleSaved }) {
-  const tile = useRef(null);
-  const address = useRef(null);
-
-  useLayoutEffect(() => {
-    if (!tile.current || !address.current) return;
-
-    const measure = () => {
-      if (!tile.current || !address.current) return;
-      const height = Math.ceil(address.current.getBoundingClientRect().height);
-      tile.current.style.setProperty('--centre-address-height', `${height}px`);
-    };
-
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(address.current);
-    window.addEventListener('resize', measure);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [centre.address]);
-
   const cover = centrePhotos(centre)[0];
+  const purchaseLabel = CENTRE_ACCESS[centreAccessPolicy(centre)].label;
 
   return (
     <div className="centre-tile-wrap">
     <button
-      ref={tile}
       type="button"
       className="centre-tile centre-tile--reveal"
       onClick={() => onOpen(centre)}
-      aria-label={`${centre.name}. Address: ${centre.address}`}
+      aria-label={`${centre.name}. ${purchaseLabel}. Address: ${centre.address || 'Not provided'}`}
     >
       <div className="centre-tile-photo">
         {cover ? <img src={asset(cover)} alt="" loading="lazy" /> : <Building2 size={40} />}
@@ -78,14 +55,19 @@ function CentreTile({ centre, onOpen, distance, saved, onToggleSaved }) {
           </span>
         )}
       </div>
-      <div className="centre-tile-caption">
+      <div className="centre-tile-caption" aria-hidden="true">
         <h3>{centre.name}</h3>
-        <div ref={address} className="centre-tile-address">
+        <div className="centre-tile-access"><CentreAccessBadge centre={centre} /></div>
+      </div>
+      <div className="centre-tile-reveal" aria-hidden="true">
+        <h3>{centre.name}</h3>
+        <div className="centre-tile-access"><CentreAccessBadge centre={centre} /></div>
+        <div className="centre-tile-address">
           <span className="centre-tile-location-icon" aria-hidden="true">
             <MapPin size={18} />
           </span>
           <div className="centre-tile-address-copy">
-            <p>{centre.address}</p>
+            <p>{centre.address || 'Address not provided'}</p>
           </div>
         </div>
       </div>
@@ -111,6 +93,7 @@ export default function UserCoolingCentres({
   favIds = [], onToggleFavourite, signedIn = false, onSignIn,
 }) {
   const [search, setSearch] = useState('');
+  const [accessFilter, setAccessFilter] = useState('all');
   const [sortNearest, setSortNearest] = useState(true);
   const [favOnly, setFavOnly] = useState(false);
   const [needSignIn, setNeedSignIn] = useState(false);
@@ -159,7 +142,7 @@ export default function UserCoolingCentres({
     locate?.();
   }
 
-  const filteredCentres = useMemo(() => centres
+  const matchingCentres = useMemo(() => centres
     .filter(centre => isPublishedCentre(centre) &&
       (!favOnly || favIds.includes(String(centre.id))) &&
       `${centre.name} ${centre.address}`.toLowerCase().includes(search.toLowerCase()))
@@ -179,6 +162,8 @@ export default function UserCoolingCentres({
       return a.distance - b.distance;
     }),
   [centres, search, userCoords, sortNearest, favOnly, favIds]);
+  const filteredCentres = useMemo(() => matchingCentres.filter(centre =>
+    accessFilter === 'all' || centreAccessPolicy(centre) === accessFilter), [matchingCentres, accessFilter]);
 
   if (page !== 'centres') return null;
 
@@ -226,6 +211,7 @@ export default function UserCoolingCentres({
           <CentreGallery key={selectedCentre.id} photos={centrePhotos(selectedCentre)} name={selectedCentre.name} />
           <section className="panel centre-details-info">
             <h3>About this cooling centre</h3>
+            <CentreVisitInfo centre={selectedCentre} />
             <div className="centre-detail-grid">
               <DetailRow icon={MapPin} label="Address">{selectedCentre.address}</DetailRow>
               <DetailRow icon={Clock3} label="Operating hours">{selectedCentre.operating_hours}</DetailRow>
@@ -291,6 +277,7 @@ export default function UserCoolingCentres({
           </div>
         </div>
       )}
+      <CentreAccessFilters centres={matchingCentres} value={accessFilter} onChange={setAccessFilter} />
       <CoolingCentresDirectoryMap
         centres={filteredCentres}
         location={userCoords}
@@ -309,7 +296,10 @@ export default function UserCoolingCentres({
           />
         ))}
       </div>
-      {!filteredCentres.length && (favOnly ? (
+      {!filteredCentres.length && (accessFilter !== 'all' || search.trim() ? (
+        <div className="centre-filter-empty"><Empty title="No matching cooling centres" text="Try another search or purchase preference." />
+          <button type="button" className="btn secondary" onClick={() => { setSearch(''); setAccessFilter('all'); }}>Clear filters</button></div>
+      ) : favOnly ? (
         <Empty title="No saved places" text="Tap the heart on a cooling centre to save it, or turn off the Saved filter." />
       ) : (
         <Empty title="No cooling centres listed" text="No verified cooling-centre locations have been published. Check official local guidance for current assistance." />
