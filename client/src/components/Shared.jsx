@@ -25,14 +25,15 @@ export function CentreVisitInfo({ centre }) {
 }
 
 export function CentreAccessFilters({ centres, value, onChange }) {
-  const counts = { all: centres.length, no_purchase: 0, purchase_required: 0, unknown: 0 };
-  centres.forEach(centre => counts[centreAccessPolicy(centre)]++);
+  const policies = ['no_purchase', 'purchase_required'];
+  const counts = { no_purchase: 0, purchase_required: 0 };
+  centres.forEach(centre => { const policy = centreAccessPolicy(centre); if (policies.includes(policy)) counts[policy]++; });
   return <section className="centre-access-filters" aria-label="Filter cooling centres by purchase policy">
-    <div className="centre-access-intro"><span><Wallet size={18} aria-hidden="true" /></span><div><h3>A cooler place, within your budget.</h3><p>Choose whether a purchase fits your visit.</p></div></div>
+    <div className="centre-access-intro"><span><Wallet size={18} aria-hidden="true" /></span><div><h3>A cooler place, within your budget.</h3><p>Select a category. Select it again to show all places.</p></div></div>
     <div className="centre-access-options" role="group" aria-label="Purchase preference">
-      {['all', ...Object.keys(CENTRE_ACCESS)].map(key => <button key={key} type="button" aria-pressed={value === key}
-        className={'centre-access-option ' + key + (value === key ? ' selected' : '')} onClick={() => onChange(key)}>
-        {key === 'all' ? 'All places' : CENTRE_ACCESS[key].label}<span>{counts[key]}</span>
+      {policies.map(key => <button key={key} type="button" aria-pressed={value === key}
+        className={'centre-access-option ' + key + (value === key ? ' selected' : '')} onClick={() => onChange(value === key ? 'all' : key)}>
+        {CENTRE_ACCESS[key].label}<span>{counts[key]}</span>
       </button>)}
     </div>
   </section>;
