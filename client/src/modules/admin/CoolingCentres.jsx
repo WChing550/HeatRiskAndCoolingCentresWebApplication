@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Search, Plus, ArrowLeft, MapPin, Clock3, Phone, Wrench, CheckCircle2, BadgeCheck } from 'lucide-react';
 import CentreAddressVerifier from '../../components/CentreAddressVerifier.jsx';
 import CentreLocationMap from '../../components/CentreLocationMap.jsx';
@@ -6,10 +6,10 @@ import CentrePhotoEditor from '../../components/CentrePhotoEditor.jsx';
 import CentreGallery from '../../components/CentreGallery.jsx';
 import { centrePhotos } from '../../lib/centrePhotos.js';
 import { isPublishedCentre } from '../../lib/centreVisibility.js';
-import { Field, Empty } from '../../components/Shared.jsx';
+import { Field, Empty, CENTRE_ACCESS, CentreAccessBadge, CentreAccessFilters, CentreVisitInfo, centreAccessPolicy } from '../../components/Shared.jsx';
 import { api, asset, status } from '../../lib/api.js';
 
-const EMPTY_CENTRE = { name: '', address: '', latitude: '3.1390', longitude: '101.6869', operatingHours: '', contact: '', description: '', facilities: '', capacity: '', status: 'open' };
+const EMPTY_CENTRE = { name: '', address: '', latitude: '3.1390', longitude: '101.6869', operatingHours: '', contact: '', description: '', facilities: '', status: 'open', accessPolicy: 'unknown', accessNotes: '' };
 
 function DetailRow({ icon: Icon, label, children }) {
   return (
@@ -24,51 +24,33 @@ function DetailRow({ icon: Icon, label, children }) {
 }
 
 function CentreTile({ centre, onOpen }) {
-  const tile = useRef(null);
-  const address = useRef(null);
-
-  useLayoutEffect(() => {
-    if (!tile.current || !address.current) return;
-
-    const measure = () => {
-      if (!tile.current || !address.current) return;
-      const height = Math.ceil(address.current.getBoundingClientRect().height);
-      tile.current.style.setProperty('--centre-address-height', `${height}px`);
-    };
-
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(address.current);
-    window.addEventListener('resize', measure);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [centre.address]);
-
   const cover = centrePhotos(centre)[0];
+  const purchaseLabel = CENTRE_ACCESS[centreAccessPolicy(centre)].label;
 
   return (
     <button
-      ref={tile}
       type="button"
       className="centre-tile centre-tile--reveal"
       onClick={() => onOpen(centre)}
-      aria-label={`${centre.name}. Address: ${centre.address}`}
+      aria-label={`${centre.name}. ${purchaseLabel}. Address: ${centre.address || 'Not provided'}`}
     >
       <div className="centre-tile-photo" style={{ position: 'relative' }}>
         {cover ? <img src={asset(cover)} alt="" loading="lazy" /> : <Building2 size={40} />}
 
       </div>
-      <div className="centre-tile-caption">
+      <div className="centre-tile-caption" aria-hidden="true">
         <h3>{centre.name}</h3>
-        <div ref={address} className="centre-tile-address">
+        <div className="centre-tile-access"><CentreAccessBadge centre={centre} /></div>
+      </div>
+      <div className="centre-tile-reveal" aria-hidden="true">
+        <h3>{centre.name}</h3>
+        <div className="centre-tile-access"><CentreAccessBadge centre={centre} /></div>
+        <div className="centre-tile-address">
           <span className="centre-tile-location-icon" aria-hidden="true">
             <MapPin size={18} />
           </span>
           <div className="centre-tile-address-copy">
-            <p>{centre.address}</p>
+            <p>{centre.address || 'Address not provided'}</p>
           </div>
         </div>
       </div>
@@ -78,6 +60,7 @@ function CentreTile({ centre, onOpen }) {
 
 export default function AdminCoolingCentres({ page, attention = 0, centres = [], loaded = true, refresh, setError, setSuccess, setPage }) {
   const [search, setSearch] = useState('');
+  const [accessFilter, setAccessFilter] = useState('all');
   const [centreEdit, setCentreEdit] = useState(null);
   const [selectedId, setSelectedId] = useState(() => location.hash.match(/^#\/centres\/(\d+)$/)?.[1] || null);
   const [photos, setPhotos] = useState([]);
@@ -117,10 +100,12 @@ export default function AdminCoolingCentres({ page, attention = 0, centres = [],
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
-  const filteredCentres = useMemo(() => centres.filter(centre =>
+  const matchingCentres = useMemo(() => centres.filter(centre =>
     isPublishedCentre(centre) &&
     `${centre.name} ${centre.address}`.toLowerCase().includes(search.toLowerCase())
   ), [centres, search]);
+  const filteredCentres = useMemo(() => matchingCentres.filter(centre =>
+    accessFilter === 'all' || centreAccessPolicy(centre) === accessFilter), [matchingCentres, accessFilter]);
 
   const setCentreField = (key, value) => setCf(previous => ({ ...previous, [key]: value }));
 
@@ -138,8 +123,9 @@ export default function AdminCoolingCentres({ page, attention = 0, centres = [],
             contact: centre.contact || '',
             description: centre.description || '',
             facilities: (centre.facilities || []).join(', '),
-            capacity: centre.capacity ?? '',
             status: centre.status || 'open',
+            accessPolicy: centreAccessPolicy(centre),
+            accessNotes: centre.access_notes || '',
           }
         : { ...EMPTY_CENTRE }
     );
@@ -243,14 +229,12 @@ export default function AdminCoolingCentres({ page, attention = 0, centres = [],
             ['name', 'Centre name *'],
             ['operatingHours', 'Operating hours *'],
             ['contact', 'Contact'],
-            ['capacity', 'Capacity'],
             ['facilities', 'Facilities (comma-separated)'],
           ].map(([key, label]) => (
             <Field key={key} label={label}>
               <input
                 value={cf[key] ?? ''}
-                type={['latitude', 'longitude', 'capacity'].includes(key) ? 'number' : 'text'}
-                step={['latitude', 'longitude'].includes(key) ? 'any' : undefined}
+                type="text"
                 onChange={e => setCentreField(key, e.target.value)}
                 required={label.includes('*')}
               />
@@ -268,6 +252,16 @@ export default function AdminCoolingCentres({ page, attention = 0, centres = [],
 
           <Field label="Description">
             <textarea rows="3" value={cf.description ?? ''} onChange={e => setCentreField('description', e.target.value)} />
+          </Field>
+
+          <Field label="Purchase policy">
+            <select value={cf.accessPolicy} onChange={e => setCentreField('accessPolicy', e.target.value)}>
+              {Object.entries(CENTRE_ACCESS).map(([key, policy]) => <option key={key} value={key}>{policy.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Visiting notes">
+            <textarea rows="3" maxLength={500} value={cf.accessNotes} onChange={e => setCentreField('accessNotes', e.target.value)}
+              placeholder="For example: public mall areas need no purchase; café seating is for customers." />
           </Field>
 
           <div className="span2">
@@ -364,6 +358,7 @@ export default function AdminCoolingCentres({ page, attention = 0, centres = [],
           <CentreGallery key={selectedCentre.id} photos={centrePhotos(selectedCentre)} name={selectedCentre.name} />
           <section className="panel centre-details-info">
             <h3>About this cooling centre</h3>
+            <CentreVisitInfo centre={selectedCentre} />
             <div className="centre-detail-grid">
               <DetailRow icon={MapPin} label="Address">{selectedCentre.address}</DetailRow>
               <DetailRow icon={Clock3} label="Operating hours">{selectedCentre.operating_hours}</DetailRow>
@@ -403,6 +398,7 @@ export default function AdminCoolingCentres({ page, attention = 0, centres = [],
       </div>
 
 
+      <CentreAccessFilters centres={matchingCentres} value={accessFilter} onChange={setAccessFilter} />
       <div className="centre-tiles">
         {filteredCentres.map(centre => (
           <CentreTile
@@ -415,8 +411,8 @@ export default function AdminCoolingCentres({ page, attention = 0, centres = [],
 
       {!filteredCentres.length && (
         <Empty
-          title="No cooling centres listed"
-          text="Only verified centres appear here. Manage pending, rejected or expired centres in Verification."
+          title={accessFilter !== 'all' || search.trim() ? 'No matching cooling centres' : 'No cooling centres listed'}
+          text={accessFilter !== 'all' || search.trim() ? 'Try another search or purchase preference.' : 'Only verified centres appear here. Manage pending, rejected or expired centres in Verification.'}
         />
       )}
     </div>

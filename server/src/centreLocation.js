@@ -7,6 +7,7 @@ const invalid = message => Object.assign(new Error(message), { status: 400 });
 const normal = value => String(value || '').trim().replace(/\s+/g, ' ');
 
 export const insideKL = (lat, lon) =>
+  [lat, lon].every(value => (typeof value === 'number' || typeof value === 'string') && String(value).trim() !== '') &&
   Number.isFinite(Number(lat)) &&
   Number.isFinite(Number(lon)) &&
   Number(lat) >= 3 &&
@@ -45,8 +46,9 @@ export function photonMatches(data) {
 
     if (
       !/kuala lumpur/i.test(
-        [p.city, p.state, p.county, p.district].filter(Boolean).join(', '),
+        [p.city, p.state, p.county].filter(Boolean).join(', '),
       )
+      && [p.city, p.state, p.county].some(Boolean)
     ) return [];
 
     const street = [p.housenumber, p.street].filter(Boolean).join(' ');
@@ -79,12 +81,37 @@ export function photonMatches(data) {
       {
         id,
         address,
+        name: normal(p.name),
+        street: normal(p.street || (p.type === 'street' ? p.name : '')),
         latitude: Number(Number(lat).toFixed(6)),
         longitude: Number(Number(lon).toFixed(6)),
         attribution: '© OpenStreetMap contributors · Photon',
       },
     ];
   });
+}
+
+const words = value => normal(value).toLowerCase().replace(/\bjln\.?\b/g, 'jalan')
+  .replace(/[^\p{L}\p{N}/]+/gu, ' ').trim();
+
+function addressSearches(address, venue) {
+  const parts = address.split(',').map(normal).filter(Boolean);
+  const street = normal(address.match(/\b(?:jalan|jln\.?|lorong|persiaran|lebuh|lebuhraya|lengkok|lintasan|medan)\s+[^,;]+/i)?.[0]
+    .replace(/\s+(?:\d{5}\s+)?kuala\s+lumpur\b.*$/i, ''));
+  const district = parts.find(part => /wangsa maju|setapak|kepong|cheras|bukit bintang|sentul|seputeh|segambut|titiwangsa|bandar tun razak|lembah pantai/i.test(part)
+    && !/\b(?:jalan|jln|lorong|persiaran)\b/i.test(part) && !/kuala lumpur/i.test(part));
+  const first = parts[0] || '';
+  const name = venue || (!street || !/\b(?:jalan|jln\.?|lorong|persiaran|lebuh|lebuhraya|lengkok|lintasan|medan)\b/i.test(first)
+    ? first.replace(/\b(?:\d{5}\s*)?kuala\s+lumpur\b.*$/i, '').trim() : '');
+  const candidates = [address, name && `${name} Kuala Lumpur`, street && district && `${street}, ${district}, Kuala Lumpur`, street && `${street}, Kuala Lumpur`];
+  return { street, name, queries: [...new Map(candidates.filter(Boolean).map(q => [words(q), normal(q)])).values()].slice(0, 4) };
+}
+
+function venueMatches(name, candidate) {
+  const generic = new Set(['mall', 'shopping', 'centre', 'center', 'the', 'cafe', 'coffee', 'restaurant', 'kuala', 'lumpur', 'malaysia']);
+  const requested = [...new Set(words(name).split(' ').filter(word => word && !generic.has(word)))];
+  const actual = new Set(words(candidate).split(' '));
+  return requested.length > 0 && requested.filter(word => actual.has(word)).length >= Math.max(1, Math.ceil(requested.length * .65));
 }
 
 export function createAddressVerifier({
@@ -107,6 +134,8 @@ export function createAddressVerifier({
       JSON.stringify({
         uid: String(userId),
         address: normal(match.address),
+        mapAddress: normal(match.mapAddress || match.address),
+        matchKind: match.matchKind === 'venue' ? 'venue' : 'street',
         lat: Number(match.latitude),
         lon: Number(match.longitude),
         anchorLat: Number(match.anchorLat ?? match.latitude),
@@ -184,12 +213,11 @@ export function createAddressVerifier({
   const confirmPin = (body, userId) => {
     const match = readToken(body.locationToken, body.address, userId);
 
-    const latitude = Number(body.latitude),
-      longitude = Number(body.longitude);
-
-    if (!insideKL(latitude, longitude)) {
+    if (!insideKL(body.latitude, body.longitude)) {
       throw invalid('The entrance pin must be inside Kuala Lumpur.');
     }
+    const latitude = Number(body.latitude),
+      longitude = Number(body.longitude);
 
     const anchorLat = Number(match.anchorLat ?? match.lat),
       anchorLon = Number(match.anchorLon ?? match.lon);
@@ -220,6 +248,8 @@ export function createAddressVerifier({
     const result = {
       id: 'entrance-pin',
       address: match.address,
+      mapAddress: match.mapAddress,
+      matchKind: match.matchKind,
       latitude: Number(latitude.toFixed(6)),
       longitude: Number(longitude.toFixed(6)),
       anchorLat,
@@ -230,8 +260,9 @@ export function createAddressVerifier({
     return { ...result, locationToken: issueToken(result, userId) };
   };
 
-  async function search(query) {
+  async function search(query, venue = '') {
     const q = normal(query);
+    const venueName = normal(venue).slice(0, 160);
 
     if (q.length < 5 || q.length > 300) {
       throw invalid(
@@ -239,7 +270,7 @@ export function createAddressVerifier({
       );
     }
 
-    const key = q.toLowerCase(),
+    const key = JSON.stringify([q.toLowerCase(), venueName.toLowerCase()]),
       stored = cache.get(key);
 
     if (stored && stored.until > now()) return stored.matches;
@@ -258,59 +289,68 @@ export function createAddressVerifier({
 
       if (cached && cached.until > now()) return cached.matches;
 
-      const wait = Math.max(0, minInterval - (now() - lastRequest));
+      const plan = addressSearches(q, venueName);
+      let matches = [];
+      for (const queryText of plan.queries) {
+        const wait = Math.max(0, minInterval - (now() - lastRequest));
 
-      if (wait) await new Promise(resolve => setTimeout(resolve, wait));
-      lastRequest = now();
+        if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+        lastRequest = now();
 
-      const url = new URL('/api/', baseUrl);
+        const url = new URL('/api/', baseUrl);
 
-      url.searchParams.set('q', q);
-      url.searchParams.set('limit', '6');
-      url.searchParams.set('lang', 'en');
-      url.searchParams.set('bbox', '101.55,3.00,101.80,3.30');
+        url.searchParams.set('q', queryText);
+        url.searchParams.set('limit', '10');
+        url.searchParams.set('lang', 'en');
+        url.searchParams.set('bbox', '101.55,3.00,101.80,3.30');
 
-      let response;
+        let response;
 
-      try {
-        response = await fetchImpl(url, {
-          signal: AbortSignal.timeout(10000),
-          headers: {
-            Accept: 'application/json',
-            'User-Agent': 'HeatSafeKL/1.0 (cooling-centre address confirmation)',
-          },
+        try {
+          response = await fetchImpl(url, {
+            signal: AbortSignal.timeout(10000),
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': 'HeatSafeKL/1.0 (cooling-centre address confirmation)',
+            },
+          });
+        } catch {
+          throw Object.assign(
+            new Error(
+              'Address verification is temporarily unavailable. Your form has been kept; please try again.',
+            ),
+            { status: 503 },
+          );
+        }
+
+        if (!response.ok) {
+          throw Object.assign(
+            new Error('Address verification is temporarily unavailable. Please try again.'),
+            { status: 503 },
+          );
+        }
+
+        let data;
+
+        try {
+          data = await response.json();
+        } catch {
+          throw Object.assign(
+            new Error('Address search returned an unreadable response. Please try again.'),
+            { status: 503 },
+          );
+        }
+
+        matches = photonMatches(data).flatMap(match => {
+          const matchKind = plan.name && venueMatches(plan.name, match.name) ? 'venue'
+            : plan.street && words(plan.street) === words(match.street) ? 'street' : null;
+          return matchKind ? [{ ...match, mapAddress: match.address, address: q, matchKind }] : [];
         });
-      } catch {
-        throw Object.assign(
-          new Error(
-            'Address verification is temporarily unavailable. Your form has been kept; please try again.',
-          ),
-          { status: 503 },
-        );
+        if (matches.length) break;
       }
-
-      if (!response.ok) {
-        throw Object.assign(
-          new Error('Address verification is temporarily unavailable. Please try again.'),
-          { status: 503 },
-        );
-      }
-
-      let data;
-
-      try {
-        data = await response.json();
-      } catch {
-        throw Object.assign(
-          new Error('Address search returned an unreadable response. Please try again.'),
-          { status: 503 },
-        );
-      }
-
-      const matches = photonMatches(data);
 
       if (cache.size >= 200) cache.delete(cache.keys().next().value);
-      cache.set(key, { matches, until: now() + 3600000 });
+      cache.set(key, { matches, until: now() + (matches.length ? 3600000 : 300000) });
 
       return matches;
     });
@@ -344,7 +384,7 @@ export function registerCentreLocationRoutes(
       legacyHeaders: false,
     }),
     ar(async (q, s) => {
-      const matches = await verifier.search(q.query.q);
+      const matches = await verifier.search(q.query.q, q.query.venue);
 
       s.set('Cache-Control', 'no-store').json({
         matches: matches.map(match => ({

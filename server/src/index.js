@@ -26,6 +26,8 @@ import {
 import { registerEmailAuth, sendVerification, EMAIL_REGEX, PASSWORD_REGEX } from './emailAuth.js';
 import { verifyMailer } from './mailer.js';
 import { registerAccountFeatures } from './accountFeatures.js';
+import { registerCentrePhotoRoutes } from './centrePhotos.js';
+import { registerCentreLocationRoutes } from './centreLocation.js';
 
 /* ==========================================================================
    App setup
@@ -368,106 +370,11 @@ app.get(
   })
 );
 
-app.post(
-  '/api/admin/centres',
-  auth,
-  admin,
-  upload.single('image'),
-  ar(async (req, res) => {
-    const b = req.body;
-    if (!str(b.name) || !str(b.address) || !str(b.operatingHours)) {
-      return res.status(400).json({ error: 'Name, address and operating hours are required.' });
-    }
-    if (!inKL(toNum(b.latitude), toNum(b.longitude))) {
-      return res.status(400).json({ error: 'Coordinates must be within Kuala Lumpur (lat 3.00–3.30, lon 101.55–101.80).' });
-    }
-
-    const result = await pool.query(
-      `INSERT INTO cooling_centres(name,address,area,latitude,longitude,operating_hours,contact,description,facilities,capacity,status,image_url,verified)
-       VALUES($1,$2,'Kuala Lumpur',$3,$4,$5,$6,$7,$8,$9,$10,$11,FALSE) RETURNING *`,
-      [
-        str(b.name),
-        str(b.address),
-        toNum(b.latitude),
-        toNum(b.longitude),
-        str(b.operatingHours),
-        str(b.contact) || null,
-        str(b.description) || null,
-        facilitiesList(b.facilities),
-        toNum(b.capacity),
-        b.status || 'open',
-        file(req),
-      ]
-    );
-    await logActivity(req, {
-      action: 'Added cooling centre',
-      module: 'Cooling Centres',
-      recordType: 'cooling_centre',
-      recordId: result.rows[0].id,
-      summary: `Added cooling centre "${result.rows[0].name}" (pending verification)`,
-    });
-    res.status(201).json(centreOut(result.rows[0]));
-  })
-);
-
-app.put(
-  '/api/admin/centres/:id',
-  auth,
-  admin,
-  upload.single('image'),
-  ar(async (req, res) => {
-    const b = req.body;
-    if (!inKL(toNum(b.latitude), toNum(b.longitude))) {
-      return res.status(400).json({ error: 'Coordinates must be within Kuala Lumpur.' });
-    }
-    const before = await pool.query('SELECT * FROM cooling_centres WHERE id=$1', [req.params.id]);
-    if (!before.rowCount) return res.status(404).json({ error: 'Centre not found.' });
-
-    const result = await pool.query(
-      `UPDATE cooling_centres SET name=$1,address=$2,latitude=$3,longitude=$4,operating_hours=$5,contact=$6,
-              description=$7,facilities=$8,capacity=$9,status=$10,image_url=COALESCE($11,image_url),updated_at=NOW()
-        WHERE id=$12 RETURNING *`,
-      [
-        str(b.name),
-        str(b.address),
-        toNum(b.latitude),
-        toNum(b.longitude),
-        str(b.operatingHours),
-        str(b.contact) || null,
-        str(b.description) || null,
-        facilitiesList(b.facilities),
-        toNum(b.capacity),
-        b.status || 'open',
-        file(req),
-        req.params.id,
-      ]
-    );
-
-    const centre = result.rows[0];
-    const changes = diffFields(before.rows[0], centre, {
-      name: 'Name',
-      address: 'Address',
-      latitude: 'Latitude',
-      longitude: 'Longitude',
-      operating_hours: 'Operating hours',
-      contact: 'Contact',
-      description: 'Description',
-      facilities: 'Facilities',
-      capacity: 'Capacity',
-      status: 'Operational status',
-      image_url: 'Photo',
-    });
-    await logActivity(req, {
-      action: 'Updated cooling centre',
-      module: 'Cooling Centres',
-      recordType: 'cooling_centre',
-      recordId: centre.id,
-      summary: `Updated cooling centre "${centre.name}"` + (Object.keys(changes).length ? '' : ' (no field changes)'),
-      details: { changes },
-    });
-    res.json(centreOut(centre));
-  })
-);
+registerCentreLocationRoutes(app, { auth, admin, ar });
+registerCentrePhotoRoutes(app, {
+  pool, auth, admin, ar, str, n: toNum, kl: inKL,
+  logActivity, centreOut, diffFields, uploadDir,
+});
 
 app.patch(
   '/api/admin/centres/:id/status',
@@ -684,6 +591,10 @@ registerAccountFeatures(app, { auth, ar, str, upload, userSafe, uploadDir }); //
 /* ==========================================================================
    Error handler + start
    ========================================================================== */
+
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'The requested API service could not be found.', code: 'API_ROUTE_NOT_FOUND' });
+});
 
 app.use((err, _req, res, _next) => {
   console.error(err.stack || err.message);

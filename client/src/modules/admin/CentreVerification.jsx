@@ -162,18 +162,26 @@ export default function CentreVerification({ ctx }) {
 
       <Panel title="Verification & inspection register" sub="Only currently verified centres appear in Cooling Centres. Manage pending, rejected and expired records here.">
         {loading ? <Empty title="Loading…" text="Please wait." /> : rows.length ? (
-          <div className="tablewrap">
-            <table>
-              <thead><tr><th>Cooling centre</th><th>Verification</th><th>Last inspection</th><th>Next inspection</th><th>Verified by</th><th></th></tr></thead>
+          <div className="tablewrap verification-register">
+            <table className="verification-table" aria-label="Cooling centre verification register">
+              <colgroup>
+                <col className="verification-col-centre" />
+                <col className="verification-col-status" />
+                <col className="verification-col-date" />
+                <col className="verification-col-date" />
+                <col className="verification-col-reviewer" />
+                <col className="verification-col-actions" />
+              </colgroup>
+              <thead><tr><th scope="col">Cooling centre</th><th scope="col">Verification</th><th scope="col">Last inspection</th><th scope="col">Next inspection</th><th scope="col">Verified by</th><th scope="col">Actions</th></tr></thead>
               <tbody>
                 {rows.map(c => (
                   <tr key={c.id}>
-                    <td><b>{c.name}</b><small className="subtle">{c.address}</small></td>
-                    <td><span className={'pill ' + c.effective_status}>{status(c.effective_status)}</span></td>
-                    <td>{c.last_inspection_date ? day(c.last_inspection_date) : '—'}{c.inspection_count > 0 && <small className="subtle">{c.inspection_count} inspection{c.inspection_count === 1 ? '' : 's'}</small>}</td>
-                    <td>{c.next_inspection_date ? day(c.next_inspection_date) : '—'}<DueLabel centre={c} /></td>
-                    <td>{c.verified_by_name || '—'}{c.verified_at && <small className="subtle">{dt(c.verified_at)}</small>}</td>
-                    <td><div className="rowactions"><button className="btn secondary small" onClick={() => openCentre(c)}><ClipboardCheck size={14} /> {c.verification_status === 'pending' ? 'Verify' : 'Inspect'}</button><button type="button" className="btn secondary small" onClick={()=>{ctx.setPage('centres');window.location.hash='/centres/'+c.id;}}>Details</button></div></td>
+                    <td data-label="Cooling centre"><b>{c.name}</b><small className="subtle">{c.address}</small></td>
+                    <td data-label="Verification"><span className={'pill ' + c.effective_status}>{status(c.effective_status)}</span></td>
+                    <td data-label="Last inspection">{c.last_inspection_date ? day(c.last_inspection_date) : '—'}{c.inspection_count > 0 && <small className="subtle">{c.inspection_count} inspection{c.inspection_count === 1 ? '' : 's'}</small>}</td>
+                    <td data-label="Next inspection">{c.next_inspection_date ? day(c.next_inspection_date) : '—'}<DueLabel centre={c} /></td>
+                    <td data-label="Verified by">{c.verified_by_name || '—'}{c.verified_at && <small className="subtle">{dt(c.verified_at)}</small>}</td>
+                    <td data-label="Actions"><div className="rowactions"><button type="button" className="btn secondary small" onClick={() => openCentre(c)}><ClipboardCheck size={14} /> {c.verification_status === 'pending' ? 'Verify' : 'Inspect'}</button><button type="button" className="btn secondary small" onClick={()=>{ctx.setPage('centres');window.location.hash='/centres/'+c.id;}}>Details</button></div></td>
                   </tr>
                 ))}
               </tbody>

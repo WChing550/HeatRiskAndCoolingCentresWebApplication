@@ -1,7 +1,43 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, MapPin, FileText, Eye } from 'lucide-react';
+import { Upload, MapPin, FileText, Eye, DoorOpen, Coffee, HelpCircle, Wallet } from 'lucide-react';
 import { api, asset, dt, status } from '../lib/api.js';
+
+export const CENTRE_ACCESS = {
+  no_purchase: { label: 'No purchase needed', Icon: DoorOpen, detail: 'Use the public indoor areas without buying food or products. Parking and optional services may have separate charges.' },
+  purchase_required: { label: 'Purchase expected', Icon: Coffee, detail: 'Plan to buy a drink or food to use customer seating. Ask staff about seating availability and any minimum order.' },
+  unknown: { label: 'Confirm access', Icon: HelpCircle, detail: 'Ask the venue whether a purchase, admission fee or other access condition applies before visiting.' },
+};
+
+export const centreAccessPolicy = centre => Object.hasOwn(CENTRE_ACCESS, centre?.access_policy) ? centre.access_policy : 'unknown';
+
+export function CentreAccessBadge({ centre }) {
+  const key = centreAccessPolicy(centre), { label, Icon } = CENTRE_ACCESS[key];
+  return <span className={'centre-access-badge ' + key}><Icon size={13} aria-hidden="true" />{label}</span>;
+}
+
+export function CentreVisitInfo({ centre }) {
+  const policy = CENTRE_ACCESS[centreAccessPolicy(centre)];
+  return <aside className={'centre-visit-info ' + centreAccessPolicy(centre)} aria-label="Purchase and access information">
+    <span className="centre-visit-icon"><Wallet size={21} aria-hidden="true" /></span>
+    <div><small>BEFORE YOU VISIT</small><CentreAccessBadge centre={centre} /><p>{centre.access_notes?.trim() || policy.detail}</p></div>
+  </aside>;
+}
+
+export function CentreAccessFilters({ centres, value, onChange }) {
+  const policies = ['no_purchase', 'purchase_required'];
+  const counts = { no_purchase: 0, purchase_required: 0 };
+  centres.forEach(centre => { const policy = centreAccessPolicy(centre); if (policies.includes(policy)) counts[policy]++; });
+  return <section className="centre-access-filters" aria-label="Filter cooling centres by purchase policy">
+    <div className="centre-access-intro"><span><Wallet size={18} aria-hidden="true" /></span><div><h3>A cooler place, within your budget.</h3><p>Select a category. Select it again to show all places.</p></div></div>
+    <div className="centre-access-options" role="group" aria-label="Purchase preference">
+      {policies.map(key => <button key={key} type="button" aria-pressed={value === key}
+        className={'centre-access-option ' + key + (value === key ? ' selected' : '')} onClick={() => onChange(value === key ? 'all' : key)}>
+        {CENTRE_ACCESS[key].label}<span>{counts[key]}</span>
+      </button>)}
+    </div>
+  </section>;
+}
 
 export function Field({ label, children }) {
   return (

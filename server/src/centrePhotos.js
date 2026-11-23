@@ -7,6 +7,14 @@ export const MAX_CENTRE_PHOTOS = 10;
 export const savedPhotos = row => [...new Set(row?.image_urls?.length ? row.image_urls : row?.image_url ? [row.image_url] : [])];
 const bad = message => Object.assign(new Error(message), { status: 400 });
 
+export function parseCentreAccess(body, previous = null) {
+  const policy = body.accessPolicy === undefined ? previous?.access_policy || 'unknown' : body.accessPolicy;
+  const rawNotes = body.accessNotes === undefined ? previous?.access_notes || '' : body.accessNotes;
+  if (!['no_purchase', 'purchase_required', 'unknown'].includes(policy)) throw bad('Choose a valid purchase policy.');
+  if (typeof rawNotes !== 'string' || rawNotes.trim().length > 500) throw bad('Visiting notes must be text of at most 500 characters.');
+  return { policy, notes: rawNotes.trim() };
+}
+
 export function resolvePhotoOrder(raw, uploaded, previous = [], legacy = false) {
   if (raw == null) {
     const result = legacy && uploaded.length ? uploaded : [...previous, ...uploaded];
@@ -67,24 +75,25 @@ export function registerCentrePhotoRoutes(app, { pool, auth, admin, ar, str, n, 
       if (!str(b.name) || !str(b.address) || !str(b.operatingHours)) throw bad('Name, address and operating hours are required.');
       if (!kl(n(b.latitude), n(b.longitude))) throw bad('Coordinates must be within Kuala Lumpur (lat 3.00–3.30, lon 101.55–101.80).');
       if (!['open', 'temporarily_closed', 'maintenance', 'unavailable'].includes(b.status || 'open')) throw bad('Invalid operational status.');
-      const capacity = n(b.capacity);
-      if (capacity != null && (!Number.isInteger(capacity) || capacity < 0)) throw bad('Capacity must be a non-negative whole number.');
       let before = null;
       if (editing) {
         const r = await pool.query('SELECT * FROM cooling_centres WHERE id=$1', [q.params.id]);
         if (!r.rowCount) throw Object.assign(new Error('Centre not found.'), { status: 404 });
         before = r.rows[0];
       }
+      const capacity = b.capacity === undefined ? before?.capacity ?? null : n(b.capacity);
+      if (capacity != null && (!Number.isInteger(capacity) || capacity < 0)) throw bad('Capacity must be a non-negative whole number.');
       verifyLocation(b, before, q.session.user.id);
+      const access = parseCentreAccess(b, before);
       const urls = resolvePhotoOrder(b.photoOrder, files.map(f => '/uploads/' + f.filename), savedPhotos(before), Boolean(q.files?.image?.length));
-      const values = [str(b.name), str(b.address), n(b.latitude), n(b.longitude), str(b.operatingHours), str(b.contact) || null, str(b.description) || null, str(b.facilities).split(',').map(x => x.trim()).filter(Boolean), capacity, b.status || 'open', urls[0] || null, urls];
+      const values = [str(b.name), str(b.address), n(b.latitude), n(b.longitude), str(b.operatingHours), str(b.contact) || null, str(b.description) || null, str(b.facilities).split(',').map(x => x.trim()).filter(Boolean), capacity, b.status || 'open', urls[0] || null, urls, access.policy, access.notes];
       const result = editing
-        ? await pool.query(`UPDATE cooling_centres SET name=$1,address=$2,latitude=$3,longitude=$4,operating_hours=$5,contact=$6,description=$7,facilities=$8,capacity=$9,status=$10,image_url=$11,image_urls=$12${centreLocationChanged(before, { address: str(b.address), latitude: n(b.latitude), longitude: n(b.longitude) }) ? ",verified=FALSE,verification_status='pending',verified_at=NULL,verified_by=NULL" : ''},updated_at=NOW() WHERE id=$13 RETURNING *`, [...values, q.params.id])
-        : await pool.query("INSERT INTO cooling_centres(name,address,latitude,longitude,operating_hours,contact,description,facilities,capacity,status,image_url,image_urls,area,verified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'Kuala Lumpur',FALSE) RETURNING *", values);
+        ? await pool.query(`UPDATE cooling_centres SET name=$1,address=$2,latitude=$3,longitude=$4,operating_hours=$5,contact=$6,description=$7,facilities=$8,capacity=$9,status=$10,image_url=$11,image_urls=$12,access_policy=$13,access_notes=$14${centreLocationChanged(before, { address: str(b.address), latitude: n(b.latitude), longitude: n(b.longitude) }) ? ",verified=FALSE,verification_status='pending',verified_at=NULL,verified_by=NULL" : ''},updated_at=NOW() WHERE id=$15 RETURNING *`, [...values, q.params.id])
+        : await pool.query("INSERT INTO cooling_centres(name,address,latitude,longitude,operating_hours,contact,description,facilities,capacity,status,image_url,image_urls,access_policy,access_notes,area,verified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Kuala Lumpur',FALSE) RETURNING *", values);
       if (!result.rowCount) throw Object.assign(new Error('Centre not found.'), { status: 404 });
       persisted = true;
       const centre = result.rows[0];
-      const changes = before ? diffFields(before, centre, { name: 'Name', address: 'Address', latitude: 'Latitude', longitude: 'Longitude', operating_hours: 'Operating hours', contact: 'Contact', description: 'Description', facilities: 'Facilities', capacity: 'Capacity', status: 'Operational status', image_urls: 'Photo gallery', verification_status: 'Verification status' }) : null;
+      const changes = before ? diffFields(before, centre, { name: 'Name', address: 'Address', latitude: 'Latitude', longitude: 'Longitude', operating_hours: 'Operating hours', contact: 'Contact', description: 'Description', facilities: 'Facilities', capacity: 'Capacity', status: 'Operational status', image_urls: 'Photo gallery', access_policy: 'Purchase policy', access_notes: 'Visiting notes', verification_status: 'Verification status' }) : null;
       await logActivity(q, { action: editing ? 'Updated cooling centre' : 'Added cooling centre', module: 'Cooling Centres', recordType: 'cooling_centre', recordId: centre.id, summary: (editing ? 'Updated' : 'Added') + ` cooling centre "${centre.name}"`, details: editing ? { changes } : null });
       s.status(editing ? 200 : 201).json(centreOut(centre));
     } finally {
