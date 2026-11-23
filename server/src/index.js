@@ -77,8 +77,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
-  fileFilter: (_req, uploaded, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(uploaded.mimetype)),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 5,
+  },
+  fileFilter: (_req, uploaded, cb) =>
+    cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(uploaded.mimetype)),
 });
 
 // Wrap async route handlers so errors reach the error handler at the bottom
@@ -362,8 +366,7 @@ app.get(
   ar(async (req, res) => {
     const all = req.query.all === 'true' && req.session.user?.role === 'admin';
     const result = await pool.query(
-      `SELECT c.*,${EXPIRED_SQL} AS expired FROM cooling_centres c ${
-        all ? '' : 'WHERE c.verified=TRUE AND NOT ' + EXPIRED_SQL
+      `SELECT c.*,${EXPIRED_SQL} AS expired FROM cooling_centres c ${all ? '' : 'WHERE c.verified=TRUE AND NOT ' + EXPIRED_SQL
       } ORDER BY c.name`
     );
     res.json(result.rows.map(centreOut));
@@ -428,7 +431,7 @@ app.delete(
 app.post(
   '/api/reports',
   auth,
-  upload.single('image'),
+  upload.array('images', 5),
   ar(async (req, res) => {
     const b = req.body;
     if (!str(b.category) || !str(b.description) || !str(b.location)) {
@@ -447,7 +450,16 @@ app.post(
     const generatedTitle = `${str(b.category)} - ${str(b.location)}`.slice(0, 200);
     const result = await pool.query(
       'INSERT INTO user_reports(user_id,title,category,description,location_text,latitude,longitude,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-      [req.session.user.id, generatedTitle, str(b.category), str(b.description), str(b.location), lat, lon, file(req)]
+      [
+        req.session.user.id,
+        generatedTitle,
+        str(b.category),
+        str(b.description),
+        str(b.location),
+        lat,
+        lon,
+        req.files?.[0] ? '/uploads/' + req.files[0].filename : null
+      ]
     );
     res.status(201).json(result.rows[0]);
   })
