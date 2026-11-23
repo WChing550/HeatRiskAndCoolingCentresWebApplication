@@ -256,47 +256,56 @@ export default function SubmitReport({ ctx }) {
             <MapPreview latitude={form.latitude} longitude={form.longitude} />
           </div>
         )}
-        <div className="span2">
-          <Field label="Description *">
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+      
+<div className="span2 report-description">
+          <div className="report-description-header">
+            <label htmlFor="report-description">Description *</label>
+            <div className="report-language">
+              <span>Voice language</span>
               <select
                 aria-label="Voice input language"
                 value={speechLanguage}
                 disabled={isListening}
                 onChange={e => setSpeechLanguage(e.target.value)}
-                style={{ width: 'auto', minWidth: 160 }}
               >
                 <option value="en-MY">English</option>
                 <option value="ms-MY">Bahasa Melayu</option>
                 <option value="zh-CN">Mandarin</option>
               </select>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={isListening ? stopVoiceInput : startVoiceInput}
-                aria-pressed={isListening}
-              >
-                {isListening ? <Square size={15} /> : <Mic size={15} />}
-                {isListening ? ' Stop listening' : ' Speak description'}
-              </button>
-              {isListening && <span role="status" style={{ color: '#b91c1c' }}>Listening…</span>}
             </div>
-            {speechError && <p role="alert" style={{ color: '#b91c1c' }}>{speechError}</p>}
+          </div>
+          <div className="report-description-input">
             <textarea
+              id="report-description"
               required
-              rows="4"
+              rows={5}
               value={form.description}
               onChange={e => setField('description', e.target.value)}
-              placeholder="What happened, when and what safety concern did you observe? Type or use the microphone."
+              placeholder="What happened, when and what safety concern did you observe?"
             />
-            <small>Review the transcribed text before submitting. Microphone permission may be required.</small>
-          </Field>
+            <button
+              type="button"
+              className={`report-mic-btn ${isListening ? 'recording' : ''}`}
+              onClick={isListening ? stopVoiceInput : startVoiceInput}
+              aria-label={isListening ? 'Stop listening' : 'Speak description'}
+              title={isListening ? 'Stop listening' : 'Speak description'}
+              aria-pressed={isListening}
+            >
+              {isListening ? <Square size={16} /> : <Mic size={19} />}
+            </button>
+          </div>
+          {isListening && <small className="report-listening" role="status">Listening... Speak now.</small>}
+          {speechError && <small className="report-speech-error" role="alert">{speechError}</small>}
+          <small className="report-description-hint">Type or tap the microphone to describe the issue.</small>
         </div>
-        <div className="span2"><PhotoDropzone label="Supporting photos (optional)" files={photos} onChange={setPhotos} /></div>
+        <div className="span2">
+          <PhotoDropzone label="Supporting photos (optional)" files={photos} onChange={setPhotos} />
+        </div>
         <div className="actions span2">
           <button type="button" className="btn secondary" onClick={() => setPage('myreports')}>Cancel</button>
-          <button className="btn primary">Submit for review ↗</button>
+          <button type="submit" className="btn primary">Submit for review ↗</button>
         </div>
+
       </form>
     </section>
   );

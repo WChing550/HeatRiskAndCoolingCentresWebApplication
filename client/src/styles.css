@@ -2758,7 +2758,7 @@ td.wrap,.tablewrap td.wrap{white-space:normal;min-width:240px}
 .feedback-status.in_progress { background: var(--fb-peach); color: var(--fb-peach-ink); }
 .feedback-status.resolved { background: var(--fb-mint); color: var(--fb-mint-ink); }
 .feedback-ticket h4 { color: var(--fb-ink); font: 750 13px/1.5 Manrope, sans-serif; margin: 12px 0 6px; overflow-wrap: anywhere; }
-.feedback-ticket p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--fb-muted); font-size: 11px; line-height: 1.7; margin: 0 0 13px; overflow-wrap: anywhere; }
+.feedback-ticket p { display: -webkit-box; -webkit-box-orient: vertical; line-clamp: 2; -webkit-line-clamp: 2; overflow: hidden; color: var(--fb-muted); font-size: 11px; line-height: 1.7; margin: 0 0 13px; overflow-wrap: anywhere; }
 .feedback-ticket footer { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 5px; color: var(--fb-muted); font-size: 9px; }
 .feedback-ticket footer > span { font-weight: 700; overflow-wrap: anywhere; }
 .feedback-pagination { display: flex; justify-content: center; align-items: center; gap: 18px; border-top: 1px solid var(--fb-line); padding: 12px; color: var(--fb-muted); font-size: 11px; }
@@ -2924,3 +2924,21 @@ html[data-theme="dark"] .feedback-desk .feedback-search > input { background: tr
       .admin-shell .feedback-list-order { max-width: 110px; }
   }
 }
+
+
+/* Submit Report: speech input layout */
+.report-description { display: flex; flex-direction: column; gap: 8px; }
+.report-description-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.report-description-header label { font-size: 12px; font-weight: 700; color: #52677a; }
+.report-language { display: flex; align-items: center; gap: 10px; }
+.report-language span { font-size: 11px; color: #8996a3; }
+.report-language select { width: 145px; padding: 8px 10px; border: 1px solid #e1e7ed; border-radius: 7px; background: white; color: #34495d; font: 11px 'DM Sans', sans-serif; }
+.report-description-input { position: relative; width: 100%; }
+.report-description-input textarea { display: block; width: 100%; min-height: 160px; box-sizing: border-box; padding: 12px 60px 50px 12px; border: 1px solid #e1e7ed; border-radius: 8px; background: white; color: #34495d; font: 11px/1.6 'DM Sans', sans-serif; resize: vertical; }
+.report-description-input textarea:focus { outline: none; border-color: #e8752e; }
+.report-mic-btn { position: absolute; right: 14px; bottom: 14px; width: 38px; height: 38px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; border-radius: 50%; background: #fff0e5; color: #e8752e; cursor: pointer; z-index: 2; }
+.report-mic-btn:hover { background: #ffe0c9; }
+.report-mic-btn.recording { background: #fee2e2; color: #dc2626; }
+.report-description-hint { font-size: 10px; color: #8996a3; }
+.report-listening, .report-speech-error { font-size: 11px; color: #dc2626; }
+@media (max-width: 580px) { .report-language span { display: none; } .report-language select { width: 125px; } }
