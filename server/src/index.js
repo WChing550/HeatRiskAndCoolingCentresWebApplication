@@ -524,8 +524,8 @@ app.post(
   upload.single('image'),
   ar(async (req, res) => {
     const b = req.body;
-    if (!str(b.title) || !str(b.category) || !str(b.description) || !str(b.location)) {
-      return res.status(400).json({ error: 'Title, category, description and location are required.' });
+    if (!str(b.category) || !str(b.description) || !str(b.location)) {
+      return res.status(400).json({ error: 'Category, description and location are required.' });
     }
     const lat = toNum(b.latitude);
     const lon = toNum(b.longitude);
@@ -536,9 +536,11 @@ app.post(
       return res.status(400).json({ error: 'Reports must be located in Kuala Lumpur.' });
     }
 
+    // Generate a consistent title on the server; never require user input.
+    const generatedTitle = `${str(b.category)} - ${str(b.location)}`.slice(0, 200);
     const result = await pool.query(
       'INSERT INTO user_reports(user_id,title,category,description,location_text,latitude,longitude,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-      [req.session.user.id, str(b.title), str(b.category), str(b.description), str(b.location), lat, lon, file(req)]
+      [req.session.user.id, generatedTitle, str(b.category), str(b.description), str(b.location), lat, lon, file(req)]
     );
     res.status(201).json(result.rows[0]);
   })

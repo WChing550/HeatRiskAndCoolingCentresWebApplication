@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LocateFixed, ImagePlus, X } from 'lucide-react';
+import { LocateFixed, ImagePlus, X, Mic, Square } from 'lucide-react';
 import { api } from '../../lib/api.js';
 
-const EMPTY_REPORT = { title: '', category: 'Heat exposure', description: '', location: '', latitude: '', longitude: '' };
+const EMPTY_REPORT = { category: 'Heat exposure', description: '', location: '', latitude: '', longitude: '' };
 const CATEGORIES = [
   'Heat exposure',
   'Unsafe outdoor condition',
@@ -128,6 +128,68 @@ export default function SubmitReport({ ctx }) {
   const [locating, setLocating] = useState(false);
   const setField = (key, value) => setForm(previous => ({ ...previous, [key]: value }));
 
+  const [speechLanguage, setSpeechLanguage] = useState('en-MY');
+  const [isListening, setIsListening] = useState(false);
+  const [speechError, setSpeechError] = useState('');
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
+
+  function startVoiceInput() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechError('Voice input is not supported by this browser. Try Chrome or Edge, or type your description.');
+      return;
+    }
+    setSpeechError('');
+    const recognition = new SpeechRecognition();
+    recognition.lang = speechLanguage;
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .filter(result => result.isFinal)
+        .map(result => result[0].transcript)
+        .join(' ').trim();
+      if (transcript) {
+        setForm(previous => ({
+          ...previous,
+          description: previous.description.trim()
+            ? `${previous.description.trim()} ${transcript}`
+            : transcript,
+        }));
+      }
+    };
+    recognition.onerror = (event) => {
+      if (event.error !== 'aborted') {
+        setSpeechError(`Voice input failed (${event.error}). You can type the description instead.`);
+      }
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
+    };
+    recognitionRef.current = recognition;
+    try { recognition.start(); }
+    catch (error) {
+      setIsListening(false);
+      recognitionRef.current = null;
+      setSpeechError('Could not start voice input. Please try again.');
+    }
+  }
+
+  function stopVoiceInput() {
+    recognitionRef.current?.stop();
+  }
+
   const hasCoords = form.latitude !== '' && form.longitude !== '';
 
   function locateForReport() {
@@ -147,6 +209,7 @@ export default function SubmitReport({ ctx }) {
 
   async function submitReport(event) {
     event.preventDefault();
+    recognitionRef.current?.abort();
     const formData = new FormData();
     Object.entries(form).forEach(([key, value]) => formData.append(key, value));
     photos.forEach(file => formData.append('images', file));
@@ -173,19 +236,18 @@ export default function SubmitReport({ ctx }) {
         </div>
       </header>
       <form className="formgrid" onSubmit={submitReport}>
-        <Field label="Report title *">
-          <input required value={form.title} onChange={e => setField('title', e.target.value)} placeholder="e.g. Unshaded pedestrian area" />
-        </Field>
+        <div className="span2">
         <Field label="Category *">
           <select value={form.category} onChange={e => setField('category', e.target.value)}>
             {CATEGORIES.map(item => <option key={item}>{item}</option>)}
           </select>
         </Field>
+        </div>
         <Field label="Location / address *">
           <input required value={form.location} onChange={e => setField('location', e.target.value)} placeholder="Street, landmark or neighbourhood" />
         </Field>
         <div className="locatebtn">
-          <button type="button" className="btn secondary" onClick={locateForReport} disabled={locating}>
+          <button type="button" className="btn secondary" style={{ marginTop: "24px" }} onClick={locateForReport} disabled={locating}>
             <LocateFixed size={15} /> {locating ? 'Locating…' : 'Use my location'}
           </button>
         </div>
@@ -194,7 +256,42 @@ export default function SubmitReport({ ctx }) {
             <MapPreview latitude={form.latitude} longitude={form.longitude} />
           </div>
         )}
-        <div className="span2"><Field label="Description *"><textarea required rows="4" value={form.description} onChange={e => setField('description', e.target.value)} placeholder="What happened, when and what safety concern did you observe?" /></Field></div>
+        <div className="span2">
+          <Field label="Description *">
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+              <select
+                aria-label="Voice input language"
+                value={speechLanguage}
+                disabled={isListening}
+                onChange={e => setSpeechLanguage(e.target.value)}
+                style={{ width: 'auto', minWidth: 160 }}
+              >
+                <option value="en-MY">English</option>
+                <option value="ms-MY">Bahasa Melayu</option>
+                <option value="zh-CN">Mandarin</option>
+              </select>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={isListening ? stopVoiceInput : startVoiceInput}
+                aria-pressed={isListening}
+              >
+                {isListening ? <Square size={15} /> : <Mic size={15} />}
+                {isListening ? ' Stop listening' : ' Speak description'}
+              </button>
+              {isListening && <span role="status" style={{ color: '#b91c1c' }}>Listening…</span>}
+            </div>
+            {speechError && <p role="alert" style={{ color: '#b91c1c' }}>{speechError}</p>}
+            <textarea
+              required
+              rows="4"
+              value={form.description}
+              onChange={e => setField('description', e.target.value)}
+              placeholder="What happened, when and what safety concern did you observe? Type or use the microphone."
+            />
+            <small>Review the transcribed text before submitting. Microphone permission may be required.</small>
+          </Field>
+        </div>
         <div className="span2"><PhotoDropzone label="Supporting photos (optional)" files={photos} onChange={setPhotos} /></div>
         <div className="actions span2">
           <button type="button" className="btn secondary" onClick={() => setPage('myreports')}>Cancel</button>
