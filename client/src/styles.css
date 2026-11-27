@@ -2319,6 +2319,192 @@ body {
   }
 }
 
+/* Report translation controls */
+
+.report-translation .report-translation-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 0 0;
+  margin: 18px 0 0;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #d5dee5;
+  border-radius: 0;
+}
+
+.report-translation .translation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #526b80;
+}
+
+.report-translation .translation-language-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) 24px minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+  width: 100%;
+}
+
+.translation-language-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.translation-language-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #60788c;
+}
+
+.report-translation .translation-language-field select {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 38px;
+  box-sizing: border-box;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid #b7c7d5;
+  border-radius: 7px;
+  background: #fff;
+  color: #526b80;
+}
+
+.translation-direction-icon {
+  align-self: end;
+  margin-bottom: 9px;
+  color: #60788c;
+}
+
+.translation-button-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.report-translation .translation-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: auto;
+  min-height: 34px;
+  padding: 8px 16px;
+  border: 1px solid #aabccc;
+  border-radius: 7px;
+  background: #e4ebf2;
+  color: #526b80;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.translation-action:hover:not(:disabled) {
+  background: #d6e2ec;
+}
+
+.translation-action:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* Translation result container */
+
+.report-translation .report-translated-text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  margin-top: 4px;
+  background: #edf3f7;
+  border: 1px solid #c5d1dc;
+  border-radius: 9px;
+}
+
+.report-translation .translation-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #d1dce5;
+}
+
+.translation-result-title {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.translation-result-title b {
+  font-size: 14px;
+  color: #34495e;
+}
+
+.report-translation .translation-language-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  font-size: 11px;
+  color: #60788c;
+}
+
+.translation-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: #fff;
+  color: #60788c;
+  border: 1px solid #c5d1dc;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.translation-copy-btn:hover {
+  background: #dce7ef;
+}
+
+.translation-result-body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #34495e;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.translation-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 14px;
+  color: #718596;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.translation-disclaimer svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 
 /* OpenStreetMap / Leaflet picker styling */
 .map-instructions {
@@ -2942,3 +3128,13 @@ html[data-theme="dark"] .feedback-desk .feedback-search > input { background: tr
 .report-description-hint { font-size: 10px; color: #8996a3; }
 .report-listening, .report-speech-error { font-size: 11px; color: #dc2626; }
 @media (max-width: 580px) { .report-language span { display: none; } .report-language select { width: 125px; } }
+
+/* Admin report translation */
+.report-translation { margin: 14px 0; }
+.report-translation-header, .report-translation-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.report-translation-header { justify-content: space-between; }
+.report-translation-controls select { padding: 8px; border: 1px solid #b5c4d0; border-radius: 7px; background: #fff; color: #52677a; font: inherit; }
+.report-translation-controls .btn { font-size: 12px; }
+.report-original-text, .report-translated-text p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.report-translated-text small { color: #52677a; }
+.report-translation-error { color: #a83232; font-size: 13px; }

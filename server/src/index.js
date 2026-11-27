@@ -29,6 +29,7 @@ import { registerAccountFeatures } from './accountFeatures.js';
 import { registerCentrePhotoRoutes } from './centrePhotos.js';
 import { registerCentreLocationRoutes } from './centreLocation.js';
 
+import { translateToEnglish } from './translation.js';
 /* ==========================================================================
    App setup
    ========================================================================== */
@@ -525,6 +526,41 @@ app.post(
   })
 );
 
+app.post(
+  '/api/admin/reports/:id/translate',
+  auth,
+  admin,
+  ar(async (req, res) => {
+    const result = await pool.query(
+      `SELECT description
+       FROM user_reports
+       WHERE id = $1`,
+      [req.params.id]
+    );
+
+    if (!result.rowCount) {
+      return res.status(404).json({
+        error: 'Report not found.',
+      });
+    }
+
+    try {
+      const translation = await translateToEnglish(
+        result.rows[0].description,
+        req.body?.language === 'auto'
+          ? undefined
+          : req.body?.language,
+        req.body?.targetLanguage || 'en'
+      );
+
+      res.json(translation);
+    } catch (error) {
+      res.status(422).json({
+        error: error.message,
+      });
+    }
+  })
+);
 /* ==========================================================================
    Dashboards
    ========================================================================== */
