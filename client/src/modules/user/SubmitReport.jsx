@@ -4,8 +4,7 @@ import { api } from '../../lib/api.js';
 
 const EMPTY_REPORT = { category: 'Heat exposure', description: '', location: '', latitude: '', longitude: '' };
 const CATEGORIES = [
-  'Heat exposure',
-  'Unsafe outdoor condition',
+  'Unsafe Heat condition',
   'Cooling centre issue',
   'New cooling centre found',
   'Heat-related incident',

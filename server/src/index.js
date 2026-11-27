@@ -435,34 +435,95 @@ app.post(
   upload.array('images', 5),
   ar(async (req, res) => {
     const b = req.body;
+
     if (!str(b.category) || !str(b.description) || !str(b.location)) {
-      return res.status(400).json({ error: 'Category, description and location are required.' });
-    }
-    const lat = toNum(b.latitude);
-    const lon = toNum(b.longitude);
-    if ((lat == null) !== (lon == null)) {
-      return res.status(400).json({ error: 'Provide both coordinates or leave both empty.' });
-    }
-    if (lat != null && !inKL(lat, lon)) {
-      return res.status(400).json({ error: 'Reports must be located in Kuala Lumpur.' });
+      return res.status(400).json({
+        error: 'Category, description and location are required.'
+      });
     }
 
-    // Generate a consistent title on the server; never require user input.
-    const generatedTitle = `${str(b.category)} - ${str(b.location)}`.slice(0, 200);
-    const result = await pool.query(
-      'INSERT INTO user_reports(user_id,title,category,description,location_text,latitude,longitude,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-      [
-        req.session.user.id,
-        generatedTitle,
-        str(b.category),
-        str(b.description),
-        str(b.location),
-        lat,
-        lon,
-        req.files?.[0] ? '/uploads/' + req.files[0].filename : null
-      ]
+    const lat = toNum(b.latitude);
+    const lon = toNum(b.longitude);
+
+    if ((lat == null) !== (lon == null)) {
+      return res.status(400).json({
+        error: 'Provide both coordinates or leave both empty.'
+      });
+    }
+
+    if (lat != null && !inKL(lat, lon)) {
+      return res.status(400).json({
+        error: 'Reports must be located in Kuala Lumpur.'
+      });
+    }
+
+    const generatedTitle =
+      `${str(b.category)} - ${str(b.location)}`.slice(0, 200);
+
+    // Get all uploaded image URLs
+    const imageUrls = (req.files || []).map(
+      uploaded => '/uploads/' + uploaded.filename
     );
-    res.status(201).json(result.rows[0]);
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Insert the report
+      const result = await client.query(
+        `INSERT INTO user_reports (
+          user_id,
+          title,
+          category,
+          description,
+          location_text,
+          latitude,
+          longitude,
+          image_url
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *`,
+        [
+          req.session.user.id,
+          generatedTitle,
+          str(b.category),
+          str(b.description),
+          str(b.location),
+          lat,
+          lon,
+          imageUrls[0] || null
+        ]
+      );
+
+      const report = result.rows[0];
+
+      // Save every uploaded image
+      for (const imageUrl of imageUrls) {
+        await client.query(
+          `INSERT INTO report_images (
+            report_id,
+            image_url
+          )
+          VALUES ($1, $2)`,
+          [report.id, imageUrl]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      res.status(201).json({
+        ...report,
+        images: imageUrls
+      });
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+
+    } finally {
+      client.release();
+    }
   })
 );
 
