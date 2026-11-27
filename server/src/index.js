@@ -531,9 +531,28 @@ app.get(
   '/api/reports/mine',
   auth,
   ar(async (req, res) => {
-    const result = await pool.query('SELECT * FROM user_reports WHERE user_id=$1 ORDER BY created_at DESC', [
-      req.session.user.id,
-    ]);
+    const result = await pool.query(
+      `SELECT r.*,
+        COALESCE(
+          (
+            SELECT array_agg(
+              ri.image_url::text ORDER BY ri.id
+            )
+            FROM report_images ri
+            WHERE ri.report_id = r.id
+          ),
+          CASE
+            WHEN r.image_url IS NOT NULL
+            THEN ARRAY[r.image_url::text]
+            ELSE ARRAY[]::text[]
+          END
+        ) AS images
+      FROM user_reports r
+      WHERE r.user_id = $1
+      ORDER BY r.created_at DESC`,
+      [req.session.user.id]
+    );
+
     res.json(result.rows);
   })
 );
