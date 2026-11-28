@@ -1,14 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LocateFixed, ImagePlus, X, Mic, Square } from 'lucide-react';
+import {
+  LocateFixed,
+  ImagePlus,
+  X,
+  Mic,
+  Square,
+  Sparkles,
+  LoaderCircle
+} from 'lucide-react';
 import { api } from '../../lib/api.js';
 
-const EMPTY_REPORT = { category: 'Heat exposure', description: '', location: '', latitude: '', longitude: '' };
+const EMPTY_REPORT = {
+  category: '',
+  description: '',
+  location: '',
+  latitude: '',
+  longitude: ''
+};
+
 const CATEGORIES = [
-  'Unsafe Heat condition',
+  'Unsafe heat conditions',
   'Cooling centre issue',
   'New cooling centre found',
   'Heat-related incident',
 ];
+
 const MAX_PHOTOS = 5;
 
 async function reverseGeocode(lat, lon) {
@@ -131,6 +147,86 @@ export default function SubmitReport({ ctx }) {
   const [speechError, setSpeechError] = useState('');
   const recognitionRef = useRef(null);
 
+  const [prediction, setPrediction] = useState(null);
+  const [predicting, setPredicting] = useState(false);
+  const [predictionError, setPredictionError] = useState('');
+  const manualCategoryRef = useRef(false);
+
+  // Automatically classify the report description
+  useEffect(() => {
+    const description = form.description.trim();
+    let cancelled = false;
+
+    setPrediction(null);
+    setPredictionError('');
+    setPredicting(false);
+
+    // Clear outdated automatic category selections
+    if (!manualCategoryRef.current) {
+      setForm(previous => ({
+        ...previous,
+        category: ''
+      }));
+    }
+
+    if (!user || description.length < 5) {
+      return;
+    }
+
+    setPredicting(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await api('/reports/predict-category', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ description })
+        });
+
+        if (cancelled) return;
+
+        setPrediction(result);
+
+        // Apply the suggestion only when confidence is sufficient
+        // and the user has not manually selected a category
+        if (
+          result.auto_suggest &&
+          CATEGORIES.includes(result.suggested_category) &&
+          !manualCategoryRef.current
+        ) {
+          setForm(previous => ({
+            ...previous,
+            category: result.suggested_category
+          }));
+        }
+
+      } catch (error) {
+        if (!cancelled) {
+          setPredictionError(
+            'Automatic classification is unavailable. Please select a category manually.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setPredicting(false);
+        }
+      }
+    }, 800);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [form.description, user?.id]);
+
+  function selectCategory(value) {
+    manualCategoryRef.current = value !== '';
+    setField('category', value);
+  }
+
+
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
@@ -205,19 +301,48 @@ export default function SubmitReport({ ctx }) {
     });
   }
 
+
   async function submitReport(event) {
     event.preventDefault();
+
+    if (!CATEGORIES.includes(form.category)) {
+      setError('Please select a report category.');
+      return;
+    }
+
     recognitionRef.current?.abort();
+
     const formData = new FormData();
-    Object.entries(form).forEach(([key, value]) => formData.append(key, value));
-    photos.forEach(file => formData.append('images', file));
+
+    Object.entries(form).forEach(([key, value]) =>
+      formData.append(key, value)
+    );
+
+    photos.forEach(file =>
+      formData.append('images', file)
+    );
+
     try {
-      await api('/reports', { method: 'POST', body: formData });
+      await api('/reports', {
+        method: 'POST',
+        body: formData
+      });
+
       setSuccess('Report submitted for review.');
+
+      // Reset ML prediction state
+      manualCategoryRef.current = false;
+      setPrediction(null);
+      setPredictionError('');
+      setPredicting(false);
+
+      // Reset report form
       setForm({ ...EMPTY_REPORT });
       setPhotos([]);
+
       setPage('myreports');
       await refresh();
+
     } catch (error) {
       setError(error.message);
     }
@@ -234,13 +359,6 @@ export default function SubmitReport({ ctx }) {
         </div>
       </header>
       <form className="formgrid" onSubmit={submitReport}>
-        <div className="span2">
-        <Field label="Category *">
-          <select value={form.category} onChange={e => setField('category', e.target.value)}>
-            {CATEGORIES.map(item => <option key={item}>{item}</option>)}
-          </select>
-        </Field>
-        </div>
         <Field label="Location / address *">
           <input required value={form.location} onChange={e => setField('location', e.target.value)} placeholder="Street, landmark or neighbourhood" />
         </Field>
@@ -254,8 +372,8 @@ export default function SubmitReport({ ctx }) {
             <MapPreview latitude={form.latitude} longitude={form.longitude} />
           </div>
         )}
-      
-<div className="span2 report-description">
+
+        <div className="span2 report-description">
           <div className="report-description-header">
             <label htmlFor="report-description">Description *</label>
             <div className="report-language">
@@ -297,12 +415,75 @@ export default function SubmitReport({ ctx }) {
           <small className="report-description-hint">Type or tap the microphone to describe the issue.</small>
         </div>
         <div className="span2">
+          <Field label="Category *">
+            <select
+              required
+              value={form.category}
+              onChange={e => selectCategory(e.target.value)}
+            >
+              <option value="">Select a category</option>
+
+              {CATEGORIES.map(item => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div
+            role="status"
+            style={{
+              marginTop: 8,
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            {predicting ? (
+              <>
+                <LoaderCircle size={15} />
+                Analysing your description...
+              </>
+            ) : predictionError ? (
+              <span style={{ color: '#b45309' }}>
+                {predictionError}
+              </span>
+            ) : prediction?.auto_suggest &&
+              CATEGORIES.includes(prediction.suggested_category) ? (
+              <>
+                <Sparkles size={16} color="#16a34a" />
+
+                <span style={{ color: '#15803d' }}>
+                  AI suggested: {prediction.suggested_category}
+
+                </span>
+              </>
+            ) : prediction ? (
+              <span style={{ color: '#b45309' }}>
+                Unable to confidently determine the category.
+                Please select a category manually.
+              </span>
+            ) : (
+              <span style={{ color: '#6b7280' }}>
+                Enter a description to automatically suggest a category.
+              </span>
+            )}
+          </div>
+
+          <small style={{ color: '#6b7280' }}>
+            You can change the suggested category if necessary.
+          </small>
+        </div>
+        <div className="span2">
           <PhotoDropzone label="Supporting photos (optional)" files={photos} onChange={setPhotos} />
         </div>
         <div className="actions span2">
           <button type="button" className="btn secondary" onClick={() => setPage('myreports')}>Cancel</button>
           <button type="submit" className="btn primary">Submit for review ↗</button>
         </div>
+
 
       </form>
     </section>

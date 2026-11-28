@@ -1,0 +1,14 @@
+Algorithm: Naive Bayes
+Evaluation: 4-fold grouped CV
+
+                          precision    recall  f1-score   support
+
+    Cooling centre issue       0.86      0.97      0.91       312
+   Heat-related incident       0.85      1.00      0.91       312
+New cooling centre found       0.78      0.94      0.85       312
+               Unrelated       0.00      0.00      0.00       128
+  Unsafe heat conditions       0.93      0.84      0.88       312
+
+                accuracy                           0.85      1376
+               macro avg       0.68      0.75      0.71      1376
+            weighted avg       0.77      0.85      0.81      1376

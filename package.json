@@ -1,0 +1,19 @@
+{
+  "name": "heatriskandcoolingcentres-webapplication",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HeatSafe KL is a web application for checking heat conditions and finding verified cooling centres in Kuala Lumpur.",
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names CLIENT,SERVER,ML \"npm run dev --prefix client\" \"npm run dev --prefix server\" \"npm run dev:ml\"",
+    "dev:ml": "cd ml && .venv\\Scripts\\python.exe -m uvicorn app:app --reload --port 8000"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WChing550/HeatRiskAndCoolingCentresWebApplication.git"
+  },
+  "license": "ISC",
+  "type": "commonjs"
+}

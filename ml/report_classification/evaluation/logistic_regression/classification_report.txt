@@ -1,0 +1,14 @@
+Algorithm: Logistic Regression
+Evaluation: 4-fold grouped CV
+
+                          precision    recall  f1-score   support
+
+    Cooling centre issue       0.96      0.96      0.96       312
+   Heat-related incident       0.88      0.98      0.93       312
+New cooling centre found       0.84      0.96      0.90       312
+               Unrelated       0.83      0.27      0.40       128
+  Unsafe heat conditions       0.89      0.91      0.90       312
+
+                accuracy                           0.89      1376
+               macro avg       0.88      0.82      0.82      1376
+            weighted avg       0.89      0.89      0.87      1376

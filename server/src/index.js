@@ -429,6 +429,53 @@ app.delete(
    Community reports
    ========================================================================== */
 
+// Automatic report category classification
+app.post(
+  '/api/reports/predict-category',
+  auth,
+  ar(async (req, res) => {
+    const description = str(req.body?.description);
+
+    if (!description) {
+      return res.status(400).json({
+        error: 'Description is required.'
+      });
+    }
+
+    try {
+      const mlApiUrl =
+        process.env.ML_API_URL || 'http://127.0.0.1:8000';
+
+      const response = await fetch(
+        `${mlApiUrl}/predict/report-category`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ description }),
+          signal: AbortSignal.timeout(5000)
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('ML prediction failed.');
+      }
+
+      const prediction = await response.json();
+
+      res.json(prediction);
+
+    } catch (error) {
+      console.error('Report classification failed:', error.message);
+
+      res.status(503).json({
+        error: 'Automatic classification is unavailable. Please select a category manually.'
+      });
+    }
+  })
+);
+
 app.post(
   '/api/reports',
   auth,

@@ -1,0 +1,43 @@
+﻿Language,Description,Expected Category,Predicted Category,Decision Score,Valid Report,Correct Prediction
+en,The outdoor queue has no shelter from the afternoon sun.,Unsafe heat conditions,Unsafe heat conditions,1.2037541747184095,True,True
+en,The metal seats at the bus stop are dangerously hot.,Unsafe heat conditions,Unsafe heat conditions,0.30177186663981614,True,True
+en,The cooling centre has no working ventilation.,Cooling centre issue,Cooling centre issue,1.0842237568644917,True,True
+en,Visitors cannot enter the listed cooling centre.,Cooling centre issue,Cooling centre issue,1.0312087786905493,True,True
+en,A nearby library now offers a free cool resting area.,New cooling centre found,New cooling centre found,0.594606729106665,True,True
+en,I discovered a public hall providing shelter and air conditioning.,New cooling centre found,New cooling centre found,-0.005591341416916307,True,True
+en,A cyclist collapsed after exercising in extreme heat.,Heat-related incident,Heat-related incident,0.9551648605498764,True,True
+en,An elderly woman experienced dizziness and nausea due to heat.,Heat-related incident,Heat-related incident,0.17165163858091104,True,True
+ms,Tempat menunggu bas sangat panas tanpa bumbung.,Unsafe heat conditions,Unsafe heat conditions,0.6929420751219784,True,True
+ms,Kawasan permainan terlalu panas dan tiada pokok teduhan.,Unsafe heat conditions,Unsafe heat conditions,1.0643402837533322,True,True
+ms,Kipas di pusat penyejukan tidak berfungsi.,Cooling centre issue,Cooling centre issue,1.5276385569758433,True,True
+ms,Pusat penyejukan ditutup walaupun masih dalam waktu operasi.,Cooling centre issue,Cooling centre issue,0.8834760285617717,True,True
+ms,Saya menjumpai perpustakaan yang menyediakan ruang rehat berhawa dingin.,New cooling centre found,New cooling centre found,0.7506576717907871,True,True
+ms,Dewan komuniti ini menyediakan tempat berehat yang sejuk secara percuma.,New cooling centre found,New cooling centre found,1.6559020351046734,True,True
+ms,Seorang pekerja mengalami pening akibat cuaca panas.,Heat-related incident,Heat-related incident,1.5950026995596114,True,True
+ms,Seorang pelajar pengsan selepas berada di bawah matahari.,Heat-related incident,Heat-related incident,0.6998421624862607,True,True
+zh,这个巴士站没有遮阳棚，下午非常炎热。,Unsafe heat conditions,Unsafe heat conditions,0.8747408082112416,True,True
+zh,公园的座椅被太阳晒得非常烫。,Unsafe heat conditions,Unsafe heat conditions,-0.20103599458840604,True,True
+zh,降温中心的空调无法正常运作。,Cooling centre issue,Cooling centre issue,0.7187002793175,True,True
+zh,地图上显示开放的降温中心已经关闭。,Cooling centre issue,Cooling centre issue,0.6031853768116123,True,True
+zh,我发现附近的图书馆提供免费冷气休息区。,New cooling centre found,New cooling centre found,0.8528027630388744,True,True
+zh,社区礼堂现在开放给公众避暑休息。,New cooling centre found,New cooling centre found,0.5137192674522948,True,True
+zh,一名工人因为天气太热而感到头晕。,Heat-related incident,Heat-related incident,0.14620617083594079,True,True
+zh,有一位老人因为中暑而晕倒。,Heat-related incident,Heat-related incident,-0.003771657846159626,True,True
+en,I cannot log into my account.,,Unrelated,0.00865379053306553,False,False
+en,How do I change my profile picture?,,Unrelated,-0.13278120985612657,False,False
+en,There is a traffic jam near my house.,,Unrelated,-0.2502651646806567,False,False
+en,It is quite warm today.,,Unsafe heat conditions,-0.24628089176390383,False,False
+ms,Saya terlupa kata laluan akaun.,,Unrelated,0.5784033242174739,False,False
+ms,Bagaimana hendak menukar gambar profil?,,Unrelated,-0.254678748583567,False,False
+ms,Jalan raya sangat sesak hari ini.,,Unsafe heat conditions,-0.3866624754863517,False,False
+ms,Cuaca hari ini agak panas.,,Heat-related incident,-0.03832860775069902,False,False
+zh,我无法登录我的账号。,,Unrelated,-0.22606513574029533,False,False
+zh,请问怎样修改个人资料？,,Unrelated,-0.2647604926228986,False,False
+zh,我家附近发生交通堵塞。,,Unsafe heat conditions,-0.5209459583635305,False,False
+zh,今天的天气有点热。,,Unrelated,-0.20650178867313626,False,False
+en,I felt dizzy and nauseous after travelling on a winding road.,,Heat-related incident,0.10577611513473895,False,False
+ms,Kawan saya muntah selepas makan makanan yang sudah basi.,,Unrelated,0.4466091590462812,False,False
+zh,我因为昨晚没有睡好，今天觉得头晕。,,Unrelated,-0.2614228549255159,False,False
+mixed,My friend pengsan sebab nampak darah.,,Unrelated,0.33290281873761607,False,False
+mixed,"Ada rider tiba-tiba pening and rasa nak pengsan tepi jalan sebab panas sangat, now dah bagi air and duduk bawah shade.",Heat-related incident,Heat-related incident,-0.05860278553534959,True,True
+mixed,"Cooling centre kat balai raya aircond rosak, panas gila kat dalam, water dispenser pun habis.",Cooling centre issue,Cooling centre issue,0.39331286796480003,True,True
