@@ -1185,7 +1185,7 @@ html[data-theme="dark"] .centre-tile--reveal .centre-tile-reveal {
 }
 
 
-/* Explain the current heat-index reading using the API's calculation trace. */
+/* Weather reading detail styles. */
 .heat-calculation {
     margin-top: 26px;
     min-width: 0;
@@ -1487,3 +1487,42 @@ html[data-theme="dark"] .centre-visit-info p { color: #d0e1dd; }
     .centre-access-intro h3 { font-size: 14px; }
     .centre-access-badge { font-size: 10px; }
 }
+
+/* 72-hour feels-like forecast */
+.heat-forecast { margin: 24px 0; border-top: 4px solid #7b9d97; }
+.forecast-choices { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 18px 0; }
+.forecast-choice { display: grid; gap: 9px; text-align: left; padding: 18px; border: 1px solid #c3d0d8; border-radius: 14px; background: #f5f8f7; color: inherit; cursor: pointer; min-width: 0; }
+.forecast-choice strong { font-size: 30px; line-height: 1.1; }
+.forecast-choice > span:first-child { font-weight: 700; }
+.forecast-choice.selected { border-color: #648c86; background: #e7f1ed; box-shadow: inset 0 3px #648c86; }
+.forecast-choice small { color: #697f8c; line-height: 1.5; }
+.forecast-choice .pill { width: fit-content; max-width: 100%; }
+.forecast-peak { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; background: #f5eee4; border-radius: 12px; }
+.forecast-peak div { display: grid; gap: 8px; min-width: 0; }
+.forecast-peak small { letter-spacing: .7px; font-size: 10px; }
+.forecast-plot { position: relative; height: 270px; margin: 20px 0; min-width: 0; }
+.forecast-hour-details { margin: 16px 0; }
+.forecast-hour-details summary,.forecast-evaluation summary,.forecast-job-status summary { cursor: pointer; font-weight: 700; }
+.forecast-hour-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 14px; }
+.forecast-hour-grid article { display: grid; gap: 9px; padding: 14px; border: 1px solid #cbd7de; border-radius: 10px; min-width: 0; }
+.forecast-hour-grid b { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.forecast-hour-grid time,.forecast-hour-grid small,.forecast-footnote { font-size: 12px; line-height: 1.65; color: #6e8592; }
+.forecast-evaluation { margin-top: 18px; padding-top: 16px; border-top: 1px solid #cbd7de; overflow-wrap: anywhere; }
+.forecast-job-status { margin: 20px 0; }
+html[data-theme="dark"] .forecast-choice { background: #252c43; border-color: #4c5b78; }
+html[data-theme="dark"] .forecast-choice.selected { background: #244b50; border-color: #83e6d5; box-shadow: inset 0 3px #83e6d5; }
+html[data-theme="dark"] .forecast-choice strong { color: #90eedd; }
+html[data-theme="dark"] .forecast-choice small,html[data-theme="dark"] .forecast-footnote,html[data-theme="dark"] .forecast-hour-grid :is(time,small) { color: #b9c8dc; }
+html[data-theme="dark"] .forecast-peak { background: #493b2d; color: #ffe4bd; }
+html[data-theme="dark"] .forecast-hour-grid article { background: #232a3e; border-color: #4c5b78; }
+@media(max-width:700px) {
+ .forecast-choices { gap: 8px; }
+ .forecast-choice { padding: 12px 9px; gap: 8px; }
+ .forecast-choice strong { font-size: 24px; }
+ .forecast-choice small,.forecast-choice > span:first-child { font-size: 11px; }
+ .forecast-choice .pill { font-size: 9px; }
+ .forecast-hour-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .forecast-peak { flex-wrap: wrap; }
+ .forecast-plot { height: 240px; }
+}
+@media(max-width:380px) { .forecast-hour-grid { grid-template-columns: minmax(0,1fr); } }

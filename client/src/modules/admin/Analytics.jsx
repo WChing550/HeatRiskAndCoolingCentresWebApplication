@@ -59,8 +59,8 @@ function exportCsv(data) {
     [],
     ['SUMMARY', 'Selected period', 'Previous period'],
     ['Readings', c.readings, p.readings],
-    ['Average heat index (°C)', c.avg_hi, p.avg_hi],
-    ['Maximum heat index (°C)', c.max_hi, p.max_hi],
+    ['Average feels-like temperature (°C)', c.avg_feels_like, p.avg_feels_like],
+    ['Maximum feels-like temperature (°C)', c.max_feels_like, p.max_feels_like],
     ['Average temperature (°C)', c.avg_temp, p.avg_temp],
     ['Low-risk readings', c.low, p.low],
     ['Moderate-risk readings', c.moderate, p.moderate],
@@ -74,20 +74,20 @@ function exportCsv(data) {
     }),
     [],
     ['DAILY READINGS'],
-    ['Date', 'Average temperature (°C)', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Readings', 'Low', 'Moderate', 'High'],
-    ...data.daily.map(d => [d.day, d.avg_temp, d.avg_hi, d.max_hi, d.readings, d.low, d.moderate, d.high]),
+    ['Date', 'Average temperature (°C)', 'Average feels-like temperature (°C)', 'Maximum feels-like temperature (°C)', 'Readings', 'Low', 'Moderate', 'High'],
+    ...data.daily.map(d => [d.day, d.avg_temp, d.avg_feels_like, d.max_feels_like, d.readings, d.low, d.moderate, d.high]),
     [],
     ['PEAK READINGS'],
-    ['Date & time (UTC)', 'Heat index (°C)', 'Temperature (°C)', 'Humidity (%)', 'Risk', 'City'],
-    ...data.peakReadings.map(r => [new Date(r.observed_at).toISOString(), r.heat_index_c, r.temperature_c, r.humidity, r.risk_level, r.city]),
+    ['Date & time (UTC)', 'Feels-like temperature (°C)', 'Temperature (°C)', 'Humidity (%)', 'Risk', 'City'],
+    ...data.peakReadings.map(r => [new Date(r.observed_at).toISOString(), r.feels_like_c, r.temperature_c, r.humidity, r.risk_level, r.city]),
     [],
     ['PEAK HEAT HOURS'],
-    ['Hour', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Readings'],
-    ...data.hourly.map(h => [hourLabel(h.hour), h.avg_hi, h.max_hi, h.readings]),
+    ['Hour', 'Average feels-like temperature (°C)', 'Maximum feels-like temperature (°C)', 'Readings'],
+    ...data.hourly.map(h => [hourLabel(h.hour), h.avg_feels_like, h.max_feels_like, h.readings]),
     [],
     ['SAMPLED LOCATIONS (~1 km cells)'],
-    ['Latitude', 'Longitude', 'Readings', 'Average heat index (°C)', 'Maximum heat index (°C)', 'Risk of average'],
-    ...data.locations.map(l => [l.lat, l.lon, l.readings, l.avg_hi, l.max_hi, l.risk_level]),
+    ['Latitude', 'Longitude', 'Readings', 'Average feels-like temperature (°C)', 'Maximum feels-like temperature (°C)', 'Risk of average'],
+    ...data.locations.map(l => [l.lat, l.lon, l.readings, l.avg_feels_like, l.max_feels_like, l.risk_level]),
     [],
     ['COMMUNITY REPORTS'],
     ['Submitted', 'Approved', 'Pending review', 'Rejected'],
@@ -146,13 +146,13 @@ function AdvancedAnalytics({ ctx }) {
   const lineData = {
     labels: daily.map(d => shortDay(d.day)),
     datasets: [
-      { label: 'Avg heat index °C', data: daily.map(d => d.avg_hi), borderColor: '#e66a3d', backgroundColor: 'rgba(230,106,61,.12)', fill: true, tension: .3 },
-      { label: 'Max heat index °C', data: daily.map(d => d.max_hi), borderColor: '#dc5a4f', borderDash: [5, 4], pointRadius: 2, tension: .3 },
+      { label: 'Avg feels-like temperature °C', data: daily.map(d => d.avg_feels_like), borderColor: '#e66a3d', backgroundColor: 'rgba(230,106,61,.12)', fill: true, tension: .3 },
+      { label: 'Max feels-like temperature °C', data: daily.map(d => d.max_feels_like), borderColor: '#dc5a4f', borderDash: [5, 4], pointRadius: 2, tension: .3 },
       { label: 'Avg air temperature °C', data: daily.map(d => d.avg_temp), borderColor: '#4e7fb9', tension: .3 }
     ]
   };
   const riskData = { labels: ['Low', 'Moderate', 'High'], datasets: [{ data: [c.low, c.moderate, c.high], backgroundColor: [RISK_COLORS.Low, RISK_COLORS.Moderate, RISK_COLORS.High], borderRadius: 7 }] };
-  const hourData = { labels: hourly.map(h => hourLabel(h.hour)), datasets: [{ label: 'Average heat index °C', data: hourly.map(h => h.avg_hi), backgroundColor: hourly.map(h => (data.peakHour && h.hour === data.peakHour.hour ? '#dc5a4f' : '#f0a07d')), borderRadius: 6 }] };
+  const hourData = { labels: hourly.map(h => hourLabel(h.hour)), datasets: [{ label: 'Average feels-like temperature °C', data: hourly.map(h => h.avg_feels_like), backgroundColor: hourly.map(h => (data.peakHour && h.hour === data.peakHour.hour ? '#dc5a4f' : '#f0a07d')), borderRadius: 6 }] };
 
   return (
     <div className="analytics-report">
@@ -168,13 +168,13 @@ function AdvancedAnalytics({ ctx }) {
       ) : (
         <>
           <div className="metrics">
-            <Metric icon={ThermometerSun} label="Maximum heat index" value={num(c.max_hi, '°C')} note={top ? dt(top.observed_at) : ''} color="orange" />
-            <Metric icon={Gauge} label="Average heat index" value={num(c.avg_hi, '°C')} note={<>vs previous: <Change cur={c.avg_hi} prev={p.avg_hi} unit="°C" /></>} color="purple" />
+            <Metric icon={ThermometerSun} label="Maximum feels-like temperature" value={num(c.max_feels_like, '°C')} note={top ? dt(top.observed_at) : ''} color="orange" />
+            <Metric icon={Gauge} label="Average feels-like temperature" value={num(c.avg_feels_like, '°C')} note={<>vs previous: <Change cur={c.avg_feels_like} prev={p.avg_feels_like} unit="°C" /></>} color="purple" />
             <Metric icon={TrendingUp} label="Average temperature" value={num(c.avg_temp, '°C')} note={<>vs previous: <Change cur={c.avg_temp} prev={p.avg_temp} unit="°C" /></>} color="blue" />
             <Metric icon={Activity} label="Readings recorded" value={c.readings} note={`${c.high} high-risk (${highShare}%)`} color="green" />
           </div>
 
-          <Panel title="Daily temperature & heat index" sub={`Average and maximum per day · last ${data.days} days`}>
+          <Panel title="Daily temperature & feels-like temperature" sub={`Average and maximum per day · last ${data.days} days`}>
             <AnalyticsChart component={Line} data={lineData} wide />
           </Panel>
 
@@ -183,19 +183,19 @@ function AdvancedAnalytics({ ctx }) {
               <AnalyticsChart component={Bar} data={riskData} />
               <p className="muted" style={{ marginTop: 10 }}>Low {c.low} ({pct(c.low)}%) · Moderate {c.moderate} ({pct(c.moderate)}%) · High {c.high} ({pct(c.high)}%)</p>
             </Panel>
-            <Panel title="Peak heat hours" sub={data.peakHour ? `Hottest on average around ${hourLabel(data.peakHour.hour)} (${data.peakHour.avg_hi}°C)` : 'Average heat index by hour of day'}>
+            <Panel title="Peak heat hours" sub={data.peakHour ? `Hottest on average around ${hourLabel(data.peakHour.hour)} (${data.peakHour.avg_feels_like}°C)` : 'Average feels-like temperature by hour of day'}>
               <AnalyticsChart component={Bar} data={hourData} />
             </Panel>
           </div>
 
-          <Panel title="Peak heat periods" sub="The five highest heat-index readings in this period">
+          <Panel title="Peak heat periods" sub="The five highest feels-like readings in this period">
             <div className="tablewrap">
               <table>
-                <thead><tr><th>Date &amp; time</th><th>Location</th><th>Heat index</th><th>Air temp.</th><th>Humidity</th><th>Risk</th></tr></thead>
+                <thead><tr><th>Date &amp; time</th><th>Location</th><th>Feels-like temperature</th><th>Air temp.</th><th>Humidity</th><th>Risk</th></tr></thead>
                 <tbody>
                   {peakReadings.map(r => (
                     <tr key={r.id}>
-                      <td>{dt(r.observed_at)}</td><td>{r.city}</td><td><b>{r.heat_index_c}°C</b></td><td>{r.temperature_c}°C</td><td>{r.humidity}%</td>
+                      <td>{dt(r.observed_at)}</td><td>{r.city}</td><td><b>{r.feels_like_c}°C</b></td><td>{r.temperature_c}°C</td><td>{r.humidity}%</td>
                       <td><span className={'pill ' + r.risk_level}>{r.risk_level}</span></td>
                     </tr>
                   ))}
@@ -213,8 +213,8 @@ function AdvancedAnalytics({ ctx }) {
             <thead><tr><th>Measure</th><th>Selected period</th><th>Previous period</th><th>Change</th></tr></thead>
             <tbody>
               <tr><td>Readings recorded</td><td>{c.readings}</td><td>{p.readings}</td><td><Change cur={c.readings} prev={p.readings} goodWhenDown={false} /></td></tr>
-              <tr><td>Average heat index</td><td>{num(c.avg_hi, '°C')}</td><td>{num(p.avg_hi, '°C')}</td><td><Change cur={c.avg_hi} prev={p.avg_hi} unit="°C" /></td></tr>
-              <tr><td>Maximum heat index</td><td>{num(c.max_hi, '°C')}</td><td>{num(p.max_hi, '°C')}</td><td><Change cur={c.max_hi} prev={p.max_hi} unit="°C" /></td></tr>
+              <tr><td>Average feels-like temperature</td><td>{num(c.avg_feels_like, '°C')}</td><td>{num(p.avg_feels_like, '°C')}</td><td><Change cur={c.avg_feels_like} prev={p.avg_feels_like} unit="°C" /></td></tr>
+              <tr><td>Maximum feels-like temperature</td><td>{num(c.max_feels_like, '°C')}</td><td>{num(p.max_feels_like, '°C')}</td><td><Change cur={c.max_feels_like} prev={p.max_feels_like} unit="°C" /></td></tr>
               <tr><td>Average temperature</td><td>{num(c.avg_temp, '°C')}</td><td>{num(p.avg_temp, '°C')}</td><td><Change cur={c.avg_temp} prev={p.avg_temp} unit="°C" /></td></tr>
               <tr><td>High-risk readings</td><td>{c.high}</td><td>{p.high}</td><td><Change cur={c.high} prev={p.high} /></td></tr>
               <tr><td>High-risk share of readings</td><td>{num(highShare, '%')}</td><td>{num(prevHighShare, '%')}</td><td><Change cur={highShare} prev={prevHighShare} unit=" pts" /></td></tr>
@@ -243,12 +243,12 @@ export default function Analytics({ ctx }) {
   if (isAdmin) return <AdvancedAnalytics ctx={ctx} />;
 
   // Public "Heat trends" view (unchanged)
-  const chart = { labels: history.map(item => new Date(item.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })), datasets: [{ label: 'Average heat index °C', data: history.map(item => item.avg_heat_index), borderColor: '#e66a3d', backgroundColor: 'rgba(230,106,61,.13)', fill: true, tension: .35 }] };
+  const chart = { labels: history.map(item => new Date(item.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })), datasets: [{ label: 'Average feels-like temperature °C', data: history.map(item => item.avg_feels_like), borderColor: '#e66a3d', backgroundColor: 'rgba(230,106,61,.13)', fill: true, tension: .35 }] };
   const risks = dash?.riskLevels || stats?.riskLevels || [];
   const bar = { labels: risks.map(item => item.risk_level), datasets: [{ data: risks.map(item => item.count), backgroundColor: ['#35a57a', '#e5a13a', '#dc5a4f'], borderRadius: 7 }] };
   const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#edf1f4' } } } };
   return (<>
-    <div className="columns"><Panel title="Heat index trend" sub="Daily average recorded by the system">{history.length ? <div className="chart tall"><Line data={chart} options={opts} /></div> : <Empty title="No heat records yet" text="Configure weather API and record readings to populate trends." />}</Panel><Panel title="Risk distribution" sub="Recorded risk levels in the last 7 days">{risks.length ? <div className="chart tall"><Bar data={bar} options={opts} /></div> : <Empty title="No risk records yet" text="Risk distribution will appear after weather readings are recorded." />}</Panel></div>
+    <div className="columns"><Panel title="Feels-like temperature trend" sub="Daily average recorded by the system">{history.length ? <div className="chart tall"><Line data={chart} options={opts} /></div> : <Empty title="No heat records yet" text="Configure weather API and record readings to populate trends." />}</Panel><Panel title="Risk distribution" sub="Recorded risk levels in the last 7 days">{risks.length ? <div className="chart tall"><Bar data={bar} options={opts} /></div> : <Empty title="No risk records yet" text="Risk distribution will appear after weather readings are recorded." />}</Panel></div>
     <div className="metrics"><Metric icon={ClipboardList} label="Approved reports" value={dash?.reports?.approved ?? stats?.approvedReports ?? 0} note="Verified submissions" color="green" /><Metric icon={Clock3} label="Pending review" value={dash?.reports?.pending ?? '—'} note="Admin view" color="orange" /><Metric icon={XCircle} label="Rejected reports" value={dash?.reports?.rejected ?? '—'} note="Excluded from verified data" color="purple" /></div>
   </>);
 }

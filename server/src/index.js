@@ -2,7 +2,7 @@ import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import bcrypt from 'bcryptjs';
 import connectPgSimple from 'connect-pg-simple';
@@ -14,7 +14,8 @@ import helmet from 'helmet';
 import multer from 'multer';
 
 import { pool } from './db.js';
-import { heatIndexC, riskLevel, riskAdvice } from './heat.js';
+import { feelsLikeC, riskLevel, riskAdvice } from './heat.js';
+import { registerForecastRoutes } from './forecast.js';
 import {
   registerAdminFeatures,
   logActivity,
@@ -39,7 +40,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const uploadDir = path.resolve(here, '..', process.env.UPLOAD_DIR || 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
-const app = express();
+export const app = express();
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
@@ -262,55 +263,41 @@ app.patch(
    ========================================================================== */
 
 async function weather(lat, lon) {
-  if (!process.env.OPENWEATHER_API_KEY) {
-    throw Object.assign(new Error('Live weather unavailable: configure OPENWEATHER_API_KEY in server/.env.'), { status: 503 });
+  const latitude = lat ?? 3.139, longitude = lon ?? 101.6869;
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw Object.assign(new Error('Enter valid latitude and longitude.'), { status: 400 });
   }
-
-  const location =
-    lat != null && lon != null
-      ? `lat=${lat}&lon=${lon}`
-      : `q=${encodeURIComponent(process.env.WEATHER_DEFAULT_CITY || 'Kuala Lumpur,MY')}`;
-  const response = await fetch(
-    `https://api.openweathermap.org/data/2.5/weather?${location}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric`
-  );
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.search = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), models: 'gfs_seamless',
+    timezone: 'UTC', current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code' });
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json' } });
   const data = await response.json();
-  if (!response.ok) throw Object.assign(new Error(data.message || 'Weather service failed.'), { status: 502 });
-
-  const temperature = Number(data.main?.temp);
-  const humidity = Number(data.main?.humidity);
-  if (!Number.isFinite(temperature) || !Number.isFinite(humidity)) {
-    throw Object.assign(new Error('Weather data incomplete.'), { status: 502 });
+  if (!response.ok) throw Object.assign(new Error('Current weather source is temporarily unavailable.'), { status: 502 });
+  const current = data.current;
+  const temperature = current?.temperature_2m, humidity = current?.relative_humidity_2m, apparent = current?.apparent_temperature;
+  const observed = typeof current?.time === 'string' ? new Date(/(?:Z|[+-]\d{2}:\d{2})$/.test(current.time) ? current.time : current.time + 'Z') : new Date(NaN);
+  if (![temperature, humidity, apparent].every(v => typeof v === 'number' && Number.isFinite(v)) ||
+      humidity < 0 || humidity > 100 || !Number.isFinite(+observed) || +observed > Date.now()+300000 || Date.now()-observed > 2*3600000) {
+    throw Object.assign(new Error('Current weather is incomplete or stale; please refresh later.'), { status: 502 });
   }
-
-  const heatIndex = heatIndexC(temperature, humidity);
-  const level = riskLevel(heatIndex);
-  const reading = {
-    city: data.name || 'Kuala Lumpur',
-    latitude: lat ?? data.coord?.lat,
-    longitude: lon ?? data.coord?.lon,
-    temperature_c: temperature,
-    humidity,
-    heat_index_c: heatIndex,
-    risk_level: level,
-    weather_description: data.weather?.[0]?.description || '',
-    observed_at: new Date((data.dt || Date.now() / 1000) * 1000).toISOString(),
-    advice: riskAdvice(level),
-  };
-
-  await pool.query(
-    'INSERT INTO heat_risk_logs(city,latitude,longitude,temperature_c,humidity,heat_index_c,risk_level,weather_description,observed_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-    [
-      reading.city,
-      reading.latitude,
-      reading.longitude,
-      temperature,
-      humidity,
-      heatIndex,
-      level,
-      reading.weather_description,
-      reading.observed_at,
-    ]
-  );
+  const feels = feelsLikeC(apparent), level = riskLevel(feels);
+  const conditions = {0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Depositing rime fog',
+    51:'Light drizzle',53:'Drizzle',55:'Dense drizzle',56:'Freezing drizzle',57:'Freezing drizzle',61:'Slight rain',
+    63:'Rain',65:'Heavy rain',66:'Freezing rain',67:'Heavy freezing rain',71:'Slight snow',73:'Snow',75:'Heavy snow',
+    77:'Snow grains',80:'Slight rain showers',81:'Rain showers',82:'Heavy rain showers',85:'Snow showers',86:'Heavy snow showers',
+    95:'Thunderstorm',96:'Thunderstorm with hail',99:'Thunderstorm with heavy hail'};
+  const reading = { city: lat != null ? 'My location' : 'Kuala Lumpur', latitude, longitude,
+    temperature_c: temperature, humidity, feels_like_c: feels, metric: 'feels_like', risk_level: level,
+    weather_description: conditions[current.weather_code] || 'Weather conditions unavailable',
+    observed_at: observed.toISOString(), fetched_at: new Date().toISOString(),
+    source: 'Open-Meteo GFS apparent temperature', advice: riskAdvice(level) };
+  try {
+    await pool.query('INSERT INTO heat_risk_logs(city,latitude,longitude,temperature_c,humidity,feels_like_c,metric_kind,source,risk_level,weather_description,observed_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      [reading.city,latitude,longitude,temperature,humidity,feels,'feels_like',reading.source,level,reading.weather_description,reading.observed_at]);
+  } catch (cause) {
+    if (['42P01','42703'].includes(cause.code)) throw Object.assign(new Error('Run server/sql/heat-risk-forecast.sql in your database, then restart the API.'), {status:503});
+    throw cause;
+  }
   return reading;
 }
 
@@ -320,7 +307,7 @@ app.get(
     if ((req.query.lat == null) !== (req.query.lon == null)) {
       return res.status(400).json({ error: 'Provide both latitude and longitude.' });
     }
-    res.json(await weather(toNum(req.query.lat), toNum(req.query.lon)));
+    res.set('Cache-Control', 'no-store').json(await weather(toNum(req.query.lat), toNum(req.query.lon)));
   })
 );
 
@@ -334,9 +321,9 @@ app.post(
       action: 'Refreshed weather',
       module: 'Heat Monitoring',
       recordType: 'heat_risk_log',
-      summary: `Refreshed weather reading: heat index ${reading.heat_index_c}°C (${reading.risk_level} risk)`,
+      summary: `Refreshed weather reading: feels-like ${reading.feels_like_c}掳C (${reading.risk_level} risk)`,
     });
-    res.json(reading);
+    res.set('Cache-Control', 'no-store').json(reading);
   })
 );
 
@@ -346,10 +333,10 @@ app.get(
     const days = Math.min(90, Math.max(1, Number(req.query.days) || 7));
     const result = await pool.query(
       `SELECT date_trunc('day',observed_at)::date AS day,
-              ROUND(AVG(heat_index_c)::numeric,1)::float AS avg_heat_index,
-              ROUND(MAX(heat_index_c)::numeric,1)::float AS max_heat_index,
+              ROUND(AVG(feels_like_c)::numeric,1)::float AS avg_feels_like,
+              ROUND(MAX(feels_like_c)::numeric,1)::float AS max_feels_like,
               COUNT(*)::int AS readings
-         FROM heat_risk_logs
+         FROM feels_like_readings
         WHERE observed_at>=NOW()-($1::text||' days')::interval
         GROUP BY 1 ORDER BY 1`,
       [days]
@@ -715,13 +702,13 @@ app.get(
       ),
       pool.query("SELECT COUNT(*)::int total FROM users WHERE role='user'"),
       pool.query(
-        `SELECT ROUND(AVG(heat_index_c)::numeric,1)::float avg_heat,
-                ROUND(MAX(heat_index_c)::numeric,1)::float max_heat,
+        `SELECT ROUND(AVG(feels_like_c)::numeric,1)::float avg_feels_like,
+                ROUND(MAX(feels_like_c)::numeric,1)::float max_feels_like,
                 MAX(observed_at) last_reading
-           FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '24 hours'`
+           FROM feels_like_readings WHERE observed_at>NOW()-INTERVAL '24 hours'`
       ),
       pool.query(
-        "SELECT risk_level,COUNT(*)::int count FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '7 days' GROUP BY risk_level"
+        "SELECT risk_level,COUNT(*)::int count FROM feels_like_readings WHERE observed_at>NOW()-INTERVAL '7 days' GROUP BY risk_level"
       ),
       pool.query(
         "SELECT location_text,COUNT(*)::int count FROM user_reports WHERE status='approved' GROUP BY location_text ORDER BY count DESC LIMIT 5"
@@ -744,10 +731,10 @@ app.get(
   ar(async (_req, res) => {
     const [heat, riskLevels, reports] = await Promise.all([
       pool.query(
-        "SELECT ROUND(AVG(heat_index_c)::numeric,1)::float avg_heat,MAX(observed_at) last_reading FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '24 hours'"
+        "SELECT ROUND(AVG(feels_like_c)::numeric,1)::float avg_feels_like,MAX(observed_at) last_reading FROM feels_like_readings WHERE observed_at>NOW()-INTERVAL '24 hours'"
       ),
       pool.query(
-        "SELECT risk_level,COUNT(*)::int count FROM heat_risk_logs WHERE observed_at>NOW()-INTERVAL '7 days' GROUP BY risk_level"
+        "SELECT risk_level,COUNT(*)::int count FROM feels_like_readings WHERE observed_at>NOW()-INTERVAL '7 days' GROUP BY risk_level"
       ),
       pool.query("SELECT COUNT(*)::int total FROM user_reports WHERE status='approved'"),
     ]);
@@ -760,6 +747,7 @@ app.get(
    ========================================================================== */
 
 registerAdminFeatures(app, { auth, admin, ar, upload, str, file });
+registerForecastRoutes(app, { auth, admin, ar });
 registerEmailAuth(app, { ar, str }); // verify-email, resend-verification, forgot-password, reset-password
 registerAccountFeatures(app, { auth, ar, str, upload, userSafe, uploadDir }); // avatar, preferences, favourites, feedback
 
@@ -780,5 +768,7 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json({ error: err.status ? err.message : 'Server error. Check the API terminal.' });
 });
 
-verifyMailer();
-app.listen(PORT, () => console.log(`HeatSafe KL API running on http://localhost:${PORT}`));
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  verifyMailer();
+  app.listen(PORT, () => console.log(`HeatSafe KL API running on http://localhost:${PORT}`));
+}

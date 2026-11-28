@@ -92,13 +92,13 @@ const periodWhere = {
 };
 const SUMMARY_SQL = where => `SELECT COUNT(*)::int AS readings,
   ROUND(AVG(temperature_c)::numeric,1)::float AS avg_temp,
-  ROUND(AVG(heat_index_c)::numeric,1)::float AS avg_hi,
-  ROUND(MAX(heat_index_c)::numeric,1)::float AS max_hi,
+  ROUND(AVG(feels_like_c)::numeric,1)::float AS avg_feels_like,
+  ROUND(MAX(feels_like_c)::numeric,1)::float AS max_feels_like,
   ROUND(MAX(temperature_c)::numeric,1)::float AS max_temp,
   COUNT(*) FILTER(WHERE risk_level='Low')::int AS low,
   COUNT(*) FILTER(WHERE risk_level='Moderate')::int AS moderate,
   COUNT(*) FILTER(WHERE risk_level='High')::int AS high
-  FROM heat_risk_logs WHERE ${where}`;
+  FROM feels_like_readings WHERE ${where}`;
 
 export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file}) {
   registerFeedbackFeatures(app, {auth, admin, ar, str, pool, logActivity});
@@ -209,8 +209,10 @@ export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file})
   /* ================= 3. HEAT ALERTS ================= */
   // Public: only alerts that are published AND inside their start/end window.
   app.get('/api/alerts/active', ar(async (_q, s) => {
-    const r = await pool.query(`SELECT id,title,description,severity,affected_area,starts_at,ends_at,published_at FROM heat_alerts
+    const r = await pool.query(`SELECT id,title,description,severity,affected_area,starts_at,ends_at,published_at,origin,forecast_metric,forecast_target_at,forecast_initial_lead_hours FROM heat_alerts
       WHERE status='published' AND starts_at<=NOW() AND ends_at>NOW()
+        AND (origin<>'forecast' OR forecast_metric='feels_like')
+        AND (origin<>'forecast' OR automation_managed=FALSE OR forecast_target_at<=NOW()+INTERVAL '24 hours')
       ORDER BY CASE severity WHEN 'High' THEN 1 WHEN 'Moderate' THEN 2 ELSE 3 END,starts_at DESC LIMIT 10`);
     s.json(r.rows);
   }));
@@ -241,7 +243,7 @@ export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file})
     const before = await pool.query('SELECT * FROM heat_alerts WHERE id=$1', [q.params.id]);
     if (!before.rowCount) return bad(s, 'Alert not found.', 404);
     if (before.rows[0].status === 'published' && new Date(p.ends) <= new Date()) return bad(s, 'A published alert cannot end in the past. Deactivate it instead.');
-    const r = await pool.query('UPDATE heat_alerts SET title=$1,description=$2,severity=$3,affected_area=$4,starts_at=$5,ends_at=$6,updated_at=NOW() WHERE id=$7 RETURNING *', [p.title, p.description, p.severity, p.area, p.starts, p.ends, q.params.id]);
+    const r = await pool.query('UPDATE heat_alerts SET title=$1,description=$2,severity=$3,affected_area=$4,starts_at=$5,ends_at=$6,automation_managed=FALSE,updated_at=NOW() WHERE id=$7 RETURNING *', [p.title, p.description, p.severity, p.area, p.starts, p.ends, q.params.id]);
     const a = r.rows[0], changes = diffFields(before.rows[0], a, ALERT_FIELDS);
     if (Object.keys(changes).length) await logActivity(q, {action: 'Updated heat alert', module: 'Alert Management', recordType: 'heat_alert', recordId: a.id, summary: `Updated alert "${a.title}"`, details: {changes}});
     s.json({...a, state: alertState(a)});
@@ -254,7 +256,7 @@ export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file})
     const before = await pool.query('SELECT * FROM heat_alerts WHERE id=$1', [q.params.id]);
     if (!before.rowCount) return bad(s, 'Alert not found.', 404);
     if (st === 'published' && new Date(before.rows[0].ends_at) <= new Date()) return bad(s, 'The end time has already passed. Edit the alert times before publishing.');
-    const r = await pool.query("UPDATE heat_alerts SET status=$1::varchar,published_at=CASE WHEN $1::varchar='published' THEN NOW() ELSE published_at END,updated_at=NOW() WHERE id=$2 RETURNING *", [st, q.params.id]);
+    const r = await pool.query("UPDATE heat_alerts SET status=$1::varchar,published_at=CASE WHEN $1::varchar='published' THEN NOW() ELSE published_at END,automation_managed=FALSE,updated_at=NOW() WHERE id=$2 RETURNING *", [st, q.params.id]);
     const a = r.rows[0];
     await logActivity(q, {action: st === 'published' ? 'Published heat alert' : st === 'deactivated' ? 'Deactivated heat alert' : 'Moved heat alert to draft', module: 'Alert Management', recordType: 'heat_alert', recordId: a.id, summary: `${st === 'published' ? 'Published' : st === 'deactivated' ? 'Deactivated' : 'Moved to draft:'} alert "${a.title}"`, details: {changes: {Status: {from: before.rows[0].status, to: st}}}});
     if (st === 'published' && before.rows[0].status !== 'published') notifyAlertSubscribers(a); // not awaited
@@ -291,25 +293,25 @@ export function registerAdminFeatures(app, {auth, admin, ar, upload, str, file})
       pool.query(SUMMARY_SQL(periodWhere.current), p),
       pool.query(SUMMARY_SQL(periodWhere.previous), p),
       pool.query(`SELECT to_char((observed_at AT TIME ZONE '${TZ}')::date,'YYYY-MM-DD') AS day,
-        ROUND(AVG(temperature_c)::numeric,1)::float AS avg_temp,ROUND(AVG(heat_index_c)::numeric,1)::float AS avg_hi,ROUND(MAX(heat_index_c)::numeric,1)::float AS max_hi,
+        ROUND(AVG(temperature_c)::numeric,1)::float AS avg_temp,ROUND(AVG(feels_like_c)::numeric,1)::float AS avg_feels_like,ROUND(MAX(feels_like_c)::numeric,1)::float AS max_feels_like,
         COUNT(*)::int AS readings,COUNT(*) FILTER(WHERE risk_level='Low')::int AS low,COUNT(*) FILTER(WHERE risk_level='Moderate')::int AS moderate,COUNT(*) FILTER(WHERE risk_level='High')::int AS high
-        FROM heat_risk_logs WHERE ${periodWhere.current} GROUP BY 1 ORDER BY 1`, p),
-      pool.query(`SELECT EXTRACT(HOUR FROM observed_at AT TIME ZONE '${TZ}')::int AS hour,ROUND(AVG(heat_index_c)::numeric,1)::float AS avg_hi,ROUND(MAX(heat_index_c)::numeric,1)::float AS max_hi,COUNT(*)::int AS readings
-        FROM heat_risk_logs WHERE ${periodWhere.current} GROUP BY 1 ORDER BY 1`, p),
-      pool.query(`SELECT id,city,observed_at,heat_index_c::float AS heat_index_c,temperature_c::float AS temperature_c,humidity,risk_level
-        FROM heat_risk_logs WHERE ${periodWhere.current} ORDER BY heat_index_c DESC,observed_at DESC LIMIT 5`, p),
+        FROM feels_like_readings WHERE ${periodWhere.current} GROUP BY 1 ORDER BY 1`, p),
+      pool.query(`SELECT EXTRACT(HOUR FROM observed_at AT TIME ZONE '${TZ}')::int AS hour,ROUND(AVG(feels_like_c)::numeric,1)::float AS avg_feels_like,ROUND(MAX(feels_like_c)::numeric,1)::float AS max_feels_like,COUNT(*)::int AS readings
+        FROM feels_like_readings WHERE ${periodWhere.current} GROUP BY 1 ORDER BY 1`, p),
+      pool.query(`SELECT id,city,observed_at,feels_like_c::float AS feels_like_c,temperature_c::float AS temperature_c,humidity,risk_level
+        FROM feels_like_readings WHERE ${periodWhere.current} ORDER BY feels_like_c DESC,observed_at DESC LIMIT 5`, p),
       // Readings grouped into ~1 km cells (2 decimal places). Only places where readings were really recorded are returned.
       pool.query(`SELECT ROUND(latitude::numeric,2)::float AS lat,ROUND(longitude::numeric,2)::float AS lon,COUNT(*)::int AS readings,
-        ROUND(AVG(heat_index_c)::numeric,1)::float AS avg_hi,ROUND(MAX(heat_index_c)::numeric,1)::float AS max_hi,COUNT(*) FILTER(WHERE risk_level='High')::int AS high
-        FROM heat_risk_logs WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND ${periodWhere.current} GROUP BY 1,2 ORDER BY readings DESC LIMIT 200`, p),
+        ROUND(AVG(feels_like_c)::numeric,1)::float AS avg_feels_like,ROUND(MAX(feels_like_c)::numeric,1)::float AS max_feels_like,COUNT(*) FILTER(WHERE risk_level='High')::int AS high
+        FROM feels_like_readings WHERE latitude IS NOT NULL AND longitude IS NOT NULL AND ${periodWhere.current} GROUP BY 1,2 ORDER BY readings DESC LIMIT 200`, p),
       pool.query(`SELECT COUNT(*)::int AS submitted,COUNT(*) FILTER(WHERE status='pending')::int AS pending,COUNT(*) FILTER(WHERE status='approved')::int AS approved,COUNT(*) FILTER(WHERE status='rejected')::int AS rejected
         FROM user_reports WHERE created_at>=NOW()-make_interval(days=>$1::int)`, p)
     ]);
-    const hourRows = hourly.rows, peakHour = hourRows.length ? hourRows.reduce((a, b) => b.avg_hi > a.avg_hi ? b : a) : null;
+    const hourRows = hourly.rows, peakHour = hourRows.length ? hourRows.reduce((a, b) => b.avg_feels_like > a.avg_feels_like ? b : a) : null;
     s.json({
       days, timezone: TZ, generatedAt: new Date().toISOString(),
       current: cur.rows[0], previous: prev.rows[0], daily: daily.rows, hourly: hourRows, peakHour,
-      peakReadings: peak.rows, locations: loc.rows.map(l => ({...l, risk_level: riskLevel(l.avg_hi)})), reports: rep.rows[0]
+      peakReadings: peak.rows, locations: loc.rows.map(l => ({...l, risk_level: riskLevel(l.avg_feels_like)})), reports: rep.rows[0]
     });
   }));
 }

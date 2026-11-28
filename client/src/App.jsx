@@ -183,11 +183,19 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => {
-      api('/alerts/active').then(SET_ALERTS).catch(() => { });
-    }, 300000);
-
-    return () => clearInterval(t);
+    let active = true;
+    const load = () => {
+      if (document.hidden) return;
+      api('/alerts/active').then(rows => { if (active) SET_ALERTS(rows); }).catch(() => { });
+    };
+    load();
+    const timer = setInterval(load, 60000);
+    document.addEventListener('visibilitychange', load);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', load);
+    };
   }, []);
 
   async function getWeather(coords) {

@@ -8,7 +8,7 @@ const pad = n => String(n).padStart(2, '0');
 // <input type="datetime-local"> works in local time without a zone, so convert both ways.
 const toLocalInput = value => { const d = new Date(value); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const blank = () => ({ title: '', severity: 'High', affectedArea: 'Kuala Lumpur', startsAt: toLocalInput(new Date()), endsAt: toLocalInput(new Date(Date.now() + 24 * 3600 * 1000)), description: '', publish: false });
-const SUGGESTION = 'High heat-index conditions have been recorded. Residents should reduce outdoor exposure, stay hydrated and use available cooling facilities.';
+const SUGGESTION = 'High feels-like conditions have been recorded. Residents should reduce outdoor exposure, stay hydrated and use available cooling facilities.';
 
 export default function AlertManagement({ ctx }) {
   const { Metric, Panel, Empty, Field, refresh, E: setError, S: setSuccess } = ctx;
@@ -17,17 +17,25 @@ export default function AlertManagement({ ctx }) {
   const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState(null); // null | { id|null, form }
   const [saving, setSaving] = useState(false);
+  const [forecastStatus, setForecastStatus] = useState(null);
 
   async function load() {
     try {
       setAlerts(await api('/admin/alerts'));
+      setForecastStatus(await api('/admin/forecast/status').catch(() => null));
     } catch (error) {
       setError(error.message);
     } finally {
       setLoading(false);
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const check = () => { if (!document.hidden) load(); };
+    check();
+    const timer = setInterval(check, 60000);
+    document.addEventListener('visibilitychange', check);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', check); };
+  }, []);
 
   const counts = useMemo(() => alerts.reduce((acc, a) => ({ ...acc, [a.state]: (acc[a.state] || 0) + 1 }), {}), [alerts]);
   const rows = useMemo(() => alerts.filter(a => filter === 'all' || a.state === filter), [alerts, filter]);
@@ -89,7 +97,8 @@ export default function AlertManagement({ ctx }) {
         <small>{rows.length} alerts</small>
       </div>
 
-      <Panel title="Heat alerts" sub="Create, publish and track advisories shown to users.">
+      {forecastStatus && <details className="panel forecast-job-status"><summary><b>Automatic forecast advisories</b> · {forecastStatus.jobs[0]?.status || 'Awaiting first job'}</summary><p>{forecastStatus.model_ready ? 'Your trained model generates 72-hour feels-like predictions. The risk bands use the predicted feels-like temperature.' : 'Train the model and install its output files before running the hourly job.'}</p><p>Automatic advisories cover only predicted risk in the next 24 hours from each job's run time. They appear immediately and show the expected heat-risk date and time in Malaysia time. Forecasts more than 24 hours away do not generate advisories.</p>{forecastStatus.jobs.map(j => <p key={j.id}>{dt(j.started_at)} · {j.status}{j.summary?.config ? ` · ${j.summary.config.auto_publish ? 'Automatic publication enabled' : 'Draft mode'} · Threshold: ${j.summary.config.minimum_risk}${j.summary.config.alert_window_hours ? ' · Next ' + j.summary.config.alert_window_hours + ' hours' : ''}` : ''}{j.error && <span role="status"> · {j.error}</span>}</p>)}</details>}
+      <Panel title="Heat alerts" sub="Create manual advisories or review advisories generated from predicted feels-like conditions.">
         {loading ? <Empty title="Loading alerts…" text="Please wait." /> : rows.length ? (
           <div className="tablewrap">
             <table>
@@ -97,7 +106,7 @@ export default function AlertManagement({ ctx }) {
               <tbody>
                 {rows.map(a => (
                   <tr key={a.id}>
-                    <td className="wrap"><b>{a.title}</b><small className="subtle">Created by {a.created_by_name || 'a removed administrator'} · {dt(a.created_at)}</small></td>
+                    <td className="wrap"><b>{a.title}</b><small className="subtle">{a.origin === 'forecast' ? 'ML forecast advisory' + (a.automation_managed ? ' · Automatic' : ' · Admin controlled') : 'Created by ' + (a.created_by_name || 'a removed administrator')} · {dt(a.created_at)}</small>{a.forecast_target_at && <small className="subtle">Expected {a.severity} heat risk: {new Date(a.forecast_target_at).toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })} MYT{a.forecast_initial_lead_hours != null ? ` · Initial published notice: ${Number(a.forecast_initial_lead_hours).toFixed(1)} hours` : ''}</small>}{a.forecast_revision_note && <small className="subtle">{a.forecast_revision_note}</small>}</td>
                     <td><span className={'pill ' + a.severity}>{a.severity}</span></td>
                     <td>{a.affected_area}</td>
                     <td>{dt(a.starts_at)}<small className="subtle">until {dt(a.ends_at)}</small></td>

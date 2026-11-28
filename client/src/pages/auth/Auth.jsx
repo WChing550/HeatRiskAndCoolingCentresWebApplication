@@ -411,7 +411,7 @@ function Auth({ home, mode, setMode, done, guest }) {
         )}
 
         <p className="fine">
-          Heat index is informational and is not a substitute for official emergency advice.
+          Feels-like temperature is informational and is not a substitute for official emergency advice.
         </p>
       </section>
     </div>

@@ -43,8 +43,8 @@ export default function AdminOverview({ ctx }) {
     ),
     datasets: [
       {
-        label: 'Average heat index °C',
-        data: history.map(r => r.avg_heat_index),
+        label: 'Average feels-like temperature °C',
+        data: history.map(r => r.avg_feels_like),
         borderColor: '#6c8fbc',
         backgroundColor: '#b8cfe833',
         fill: true,
@@ -130,10 +130,10 @@ export default function AdminOverview({ ctx }) {
         </div>
 
         <div className="operations-reading">
-          <span className="mono">LATEST HEAT INDEX</span>
+          <span className="mono">LATEST FEELS-LIKE TEMPERATURE</span>
 
           <strong>
-            {weather ? weather.heat_index_c : '—'}
+            {weather ? weather.feels_like_c : '—'}
             <small>°C</small>
           </strong>
 
@@ -198,15 +198,15 @@ export default function AdminOverview({ ctx }) {
 
         <Metric
           icon={ThermometerSun}
-          label="24h average heat index"
+          label="24h average feels-like temperature"
           value={
-            dash?.heat?.avg_heat != null
-              ? dash.heat.avg_heat + '°C'
+            dash?.heat?.avg_feels_like != null
+              ? dash.heat.avg_feels_like + '°C'
               : '—'
           }
           note={
-            dash?.heat?.max_heat != null
-              ? 'Peak reading ' + dash.heat.max_heat + '°C'
+            dash?.heat?.max_feels_like != null
+              ? 'Peak reading ' + dash.heat.max_feels_like + '°C'
               : 'No readings recorded'
           }
           color="green"
@@ -216,7 +216,7 @@ export default function AdminOverview({ ctx }) {
       <div className="operations-grid">
         <Panel
           title="The heat, over time"
-          sub="Daily average heat index · past seven days"
+          sub="Daily average feels-like temperature · past seven days"
           action="Explore analytics"
           click={() => P('trends')}
         >
@@ -234,7 +234,7 @@ export default function AdminOverview({ ctx }) {
           <div className="chart-footnote">
             <span>
               <i />
-              Heat index °C
+              Feels-like temperature °C
             </span>
             <span>Observe. Understand. Act.</span>
           </div>
