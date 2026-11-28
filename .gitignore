@@ -31,3 +31,9 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+
+**/.venv/
+ml/heat_risk_prediction/data/
+ml/heat_risk_prediction/models/*comparison.csv
+ml/heat_risk_prediction/models/*test-predictions.csv
+*.log
