@@ -1,0 +1,61 @@
+name: HeatSafe hourly feels-like forecasts
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run mode
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - run
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heatsafe-hourly-feels-like-forecast
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_SSL: 'true'
+      AUTO_PUBLISH_FORECAST_ALERTS: ${{ vars.AUTO_PUBLISH_FORECAST_ALERTS || 'false' }}
+      FORECAST_ALERT_MIN_RISK: ${{ vars.FORECAST_ALERT_MIN_RISK || 'High' }}
+      MODE: ${{ github.event.inputs.mode || 'run' }}
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: ml/heat_risk_prediction/requirements.txt
+      - name: Check trained files and database setup
+        run: node -e "require('node:fs').accessSync('../ml/heat_risk_prediction/models/feels-like.joblib');require('node:fs').accessSync('../ml/heat_risk_prediction/models/feels-like-evaluation.json');if(!process.env.DATABASE_URL)throw Error('Configure the DATABASE_URL repository secret')"
+      - run: npm ci --omit=dev
+      - run: python -m pip install -r ../ml/heat_risk_prediction/requirements.txt
+      - name: Predict and process advisories
+        run: |
+          if [ "$MODE" = "dry-run" ]; then
+            node src/forecast.js run --dry-run
+          else
+            node src/forecast.js run
+          fi
