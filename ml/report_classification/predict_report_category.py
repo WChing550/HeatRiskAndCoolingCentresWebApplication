@@ -10,7 +10,7 @@ MODEL_PATH = (
 )
 
 # 2. Define decision-score threshold
-DECISION_THRESHOLD = 0.30
+DECISION_THRESHOLD = 0.20
 
 # 3. Load trained model
 model = joblib.load(MODEL_PATH)
