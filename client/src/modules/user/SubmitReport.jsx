@@ -8,7 +8,6 @@ const CATEGORIES = [
   'Cooling centre issue',
   'New cooling centre found',
   'Heat-related incident',
-  'Other',
 ];
 const MAX_PHOTOS = 5;
 
