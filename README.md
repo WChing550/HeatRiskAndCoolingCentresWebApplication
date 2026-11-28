@@ -2,17 +2,17 @@
 
 HeatSafe KL is a web application for checking heat conditions and finding verified cooling centres in Kuala Lumpur. Residents can submit reports about heat-related issues in their neighbourhood. Administrators review those reports, maintain cooling centre records, and publish heat advisories.
 
-The frontend uses React and Vite, the API runs on Express, and PostgreSQL stores account, centre, report, and weather records. The app uses OpenWeather for current conditions, Leaflet with OpenStreetMap for centre maps, and Chart.js for trend charts.
+The frontend uses React and Vite, the API runs on Express, and PostgreSQL stores account, centre, report, and weather records. The app uses Open-Meteo for current feels-like conditions, Leaflet with OpenStreetMap for centre maps, and Chart.js for trend charts.
 
 ## User module
 
 Choose **Continue as public visitor** to view heat readings, trends, active advisories, and cooling centres. Create an account and sign in to submit reports and manage your profile.
 
-- **Heat risk** shows the current heat index, air temperature, relative humidity, and recommended precautions. Use the Kuala Lumpur reading or allow location access for a reading near you.
+- **Heat risk** shows the current feels-like temperature, air temperature, relative humidity, and recommended precautions. Use the Kuala Lumpur reading or allow location access for a reading near you.
 - **Cooling centres** lets you search by centre name or address. Open a centre to see its photo gallery, operating hours, facilities, contact details, and map. Allow location access to get walking directions in Google Maps.
-- **Submit report** accepts a title, category, description, and location. You can attach a photo to show what happened.
+- **Submit report** accepts a description, category and location, with an optional photo. The existing report classifier can suggest a category from the description; users can choose a category manually.
 - **My reports** shows which submissions are pending, approved, or rejected, along with any review notes.
-- **Heat trends** charts the daily average heat index from stored readings.
+- **Heat trends** charts the daily average feels-like temperature from stored readings.
 - **My profile** lets you update your name, username, profile photo, and password.
 
 ## Admin module
@@ -50,13 +50,15 @@ cd server
 npm ci
 ```
 
-Create `server/.env` and fill in your database credentials, a random session secret, and an OpenWeather API key. The key is needed for live heat readings.
+Create `server/.env` and fill in your database credentials and a random session secret. Open-Meteo current weather does not require an API key for this educational setup.
 
 ```dotenv
 DATABASE_URL=postgresql://postgres:YOUR_DB_PASSWORD@localhost:5432/heat_admin
 DATABASE_SSL=false
 SESSION_SECRET=REPLACE_WITH_A_RANDOM_SECRET
-OPENWEATHER_API_KEY=YOUR_OPENWEATHER_KEY
+AUTO_PUBLISH_FORECAST_ALERTS=false
+FORECAST_ALERT_MIN_RISK=High
+PYTHON_BIN=.venv/Scripts/python.exe
 CLIENT_ORIGIN=http://localhost:5173
 PORT=4000
 ```
@@ -67,6 +69,7 @@ With the terminal still in `server`, initialize the database and start Express.
 
 ```sh
 npm run db:init
+node src/forecast.js migrate
 npm run dev
 ```
 
@@ -88,11 +91,15 @@ Open [localhost:5173](http://localhost:5173). Vite forwards `/api` and `/uploads
 
 Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `MAIL_FROM` in `server/.env` using your mail provider’s settings. The SMTP port defaults to `587`. Password reset links use `CLIENT_ORIGIN`, so set it to the frontend address users can open.
 
-## Heat index and trends
+### Keep the report classifier running
 
-The server calculates the heat index from air temperature and relative humidity. It applies Rothfusz regression when the initial estimate reaches 80°F (about 26.7°C) and uses the simpler estimate below that point. The app displays the result in Celsius.
+The existing report-classification API remains in the top-level `ml` folder. Its Python environment and trained report model are separate from the new weather environment in `server/.venv`. Keep your existing report setup and `ML_API_URL` setting. The root `npm run dev` command starts the client, Express API and report API together using the existing Windows report environment.
 
-| App risk level | Heat index |
+## Feels-like temperature and trends
+
+The server reads apparent_temperature from the Open-Meteo GFS current-weather response. Risk bands use this feels-like value. The 72-hour forecast is produced by a separately trained model with historical apparent_temperature targets. Training and setup are described in TRAINING-AND-SETUP.txt delivered with this update. Automatic advisories cover predicted High risk within the next 24 hours.
+
+| App risk level | Feels-like temperature |
 | --- | --- |
 | Low | 32°C or below |
 | Moderate | Above 32°C and up to 40°C |
@@ -112,6 +119,8 @@ Uploaded files are saved in `server/uploads` by default. Use `UPLOAD_DIR` to poi
 client/src/modules/user/   Public and signed-in user pages
 client/src/modules/admin/  Admin pages and the shared cooling centre directory
 client/src/components/     Shared UI, maps, and photo tools
-server/src/               Express API, database access, and heat index calculation
-server/sql/               PostgreSQL schema and centre photo migration
+server/src/               Express API, current feels-like readings and forecast jobs
+server/sql/               PostgreSQL schema and feature migrations
+server/ml/                Weather training, dataset and generated forecast models
+ml/                       Existing report classifier and its API
 ```
